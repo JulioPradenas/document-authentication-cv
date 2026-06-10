@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Data directories (not tracked in git — use DVC or manual transfer)
+data/raw/*
+data/processed/*
+data/augmented/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/augmented/.gitkeep
+
+# Model weights (use Git LFS for *.pt files — see .gitattributes)
+*.pt
+*.pth
+
+# MLflow tracking
+mlflow/
+
+# Generated reports
+reports/pdf/*
+!reports/pdf/.gitkeep
+
+# Environment variables
+.env
+.env.local
+
+# Cache directories
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# macOS
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDEs
+.vscode/
+.idea/

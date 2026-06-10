@@ -1,0 +1,4 @@
+# Model weights are tracked via Git LFS
+# Run: git lfs track "*.pt" before committing model files
+*.pt
+*.pth
