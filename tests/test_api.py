@@ -223,6 +223,34 @@ class TestAuthenticate:
         ).json()
         assert data["gradcam_b64"] == "abc123"
 
+    def test_check_quality_forwarded(self, client):
+        c, mock_pred = client
+        c.post("/authenticate", json={"image_b64": make_b64_image(), "check_quality": True})
+        assert mock_pred.predict.call_args.kwargs["check_quality"] is True
+
+    def test_check_quality_defaults_false(self, client):
+        c, mock_pred = client
+        c.post("/authenticate", json={"image_b64": make_b64_image()})
+        assert mock_pred.predict.call_args.kwargs["check_quality"] is False
+
+    def test_rejected_label_passes_through(self, client):
+        c, mock_pred = client
+        mock_pred.predict.return_value = {
+            "label": "rejected",
+            "probability": 0.6,
+            "threshold": 0.5,
+            "inference_ms": 8.0,
+            "gradcam_b64": None,
+            "most_activated_region": None,
+            "quality": {"passed": False, "reasons": ["imagen borrosa"]},
+        }
+        data = c.post(
+            "/authenticate",
+            json={"image_b64": make_b64_image(), "check_quality": True},
+        ).json()
+        assert data["label"] == "rejected"
+        assert data["quality"]["passed"] is False
+
 
 # ---------------------------------------------------------------------------
 # 5. POST /authenticate/batch

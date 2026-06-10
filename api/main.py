@@ -109,6 +109,7 @@ def authenticate(req: AuthenticateRequest) -> AuthenticateResponse:
             threshold=req.threshold,
             return_gradcam=req.return_gradcam,
             gradcam_method=req.gradcam_method,
+            check_quality=req.check_quality,
         )
     except Exception as exc:
         raise HTTPException(
@@ -136,6 +137,7 @@ def authenticate_batch(req: BatchAuthenticateRequest) -> BatchAuthenticateRespon
                 threshold=item.threshold,
                 return_gradcam=item.return_gradcam,
                 gradcam_method=item.gradcam_method,
+                check_quality=item.check_quality,
             )
             results.append(AuthenticateResponse(**r))
         except Exception as exc:
