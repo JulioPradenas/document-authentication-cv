@@ -22,6 +22,7 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from api.predictor import DocumentPredictor
+from src.reporting.pdf_report import PDFReportGenerator
 
 # ---------------------------------------------------------------------------
 # Config
@@ -166,6 +167,21 @@ def _render_result_card(result: dict, image: Image.Image) -> None:
                     f"activación media: {r['mean_activation']:.3f}"
                 )
 
+        pdf_bytes = PDFReportGenerator().generate(
+            result=result,
+            image_b64=pil_to_b64(image, fmt="PNG"),
+            model_info=st.session_state.get("model_info"),
+            filename=result.get("_filename"),
+        )
+        st.download_button(
+            "Descargar informe PDF",
+            data=pdf_bytes,
+            file_name="informe_autenticacion.pdf",
+            mime="application/pdf",
+            key=f"pdf_{len(st.session_state.history)}_{id(result)}",
+            use_container_width=True,
+        )
+
 
 def _render_stats() -> None:
     history = st.session_state.history
@@ -213,6 +229,7 @@ if predictor is None:
 else:
     st.sidebar.success("Modelo cargado")
     info = predictor.model_info()
+    st.session_state.model_info = info
     st.sidebar.caption(
         f"Arquitectura: {info['architecture']}  \n"
         f"Parámetros: {info['total_params']:,}  \n"

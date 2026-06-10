@@ -2,6 +2,7 @@
 
 POST /authenticate        — classify a single document image
 POST /authenticate/batch  — classify up to 32 images in one call
+POST /report              — classify and return a PDF report
 GET  /health              — liveness + model readiness check
 GET  /model/info          — architecture, param counts, checkpoint metadata
 """
@@ -14,6 +15,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, status
+from fastapi.responses import Response
 
 from api.predictor import DocumentPredictor
 from api.schemas import (
@@ -24,6 +26,7 @@ from api.schemas import (
     HealthResponse,
     ModelInfoResponse,
 )
+from src.reporting.pdf_report import PDFReportGenerator
 
 # ---------------------------------------------------------------------------
 # Configuration (override via env vars)
@@ -144,4 +147,33 @@ def authenticate_batch(req: BatchAuthenticateRequest) -> BatchAuthenticateRespon
     return BatchAuthenticateResponse(
         results=results,
         total_ms=round((time.perf_counter() - t0) * 1e3, 2),
+    )
+
+
+@app.post("/report", status_code=status.HTTP_200_OK, tags=["authentication"])
+def report(req: AuthenticateRequest) -> Response:
+    """Classify the image and return a one-page PDF report."""
+    predictor = _get_predictor()
+    try:
+        result = predictor.predict(
+            image_b64=req.image_b64,
+            threshold=req.threshold,
+            return_gradcam=req.return_gradcam,
+            gradcam_method=req.gradcam_method,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Inference failed: {exc}",
+        ) from exc
+
+    pdf_bytes = PDFReportGenerator().generate(
+        result=result,
+        image_b64=req.image_b64,
+        model_info=predictor.model_info(),
+    )
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=informe_autenticacion.pdf"},
     )
