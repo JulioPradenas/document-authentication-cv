@@ -59,6 +59,9 @@ exclude = ["notebooks/"]
 select = ["E", "F", "I", "UP"]
 ignore = ["E501"]
 
+[tool.ruff.lint.isort]
+known-first-party = ["src", "api", "dashboard"]
+
 [tool.ruff.lint.per-file-ignores]
 "tests/*.py"    = ["E402", "F811"]
 "dashboard/app.py" = ["E402"]
