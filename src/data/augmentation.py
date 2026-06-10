@@ -5,14 +5,14 @@ OpenCV and NumPy. No Albumentations dependency — that's used in the trainer.
 """
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Literal
 
 import cv2
 import numpy as np
 
 
-class ForgeryType(str, Enum):
+class ForgeryType(StrEnum):
     TEXT_BLUR = "text_blur"
     COLOR_SHIFT = "color_shift"
     SPLICING = "splicing"
@@ -63,8 +63,12 @@ class SyntheticForgeryGenerator:
         dispatch = {
             ForgeryType.TEXT_BLUR: lambda img: self.apply_text_blur(img, config.intensity),
             ForgeryType.COLOR_SHIFT: lambda img: self.apply_color_shift(img, config.intensity),
-            ForgeryType.SPLICING: lambda img: self.apply_splicing(img, config.intensity, reference_image),
-            ForgeryType.HOLOGRAM_NOISE: lambda img: self.apply_hologram_noise(img, config.intensity),
+            ForgeryType.SPLICING: lambda img: self.apply_splicing(
+                img, config.intensity, reference_image
+            ),
+            ForgeryType.HOLOGRAM_NOISE: lambda img: self.apply_hologram_noise(
+                img, config.intensity
+            ),
         }
         return dispatch[config.forgery_type](image)
 
@@ -111,7 +115,7 @@ class SyntheticForgeryGenerator:
 
         # Build circular mask
         ys, xs = np.ogrid[:h, :w]
-        mask = ((xs - cx) ** 2 + (ys - cy) ** 2 <= radius ** 2).astype(np.uint8)
+        mask = ((xs - cx) ** 2 + (ys - cy) ** 2 <= radius**2).astype(np.uint8)
 
         hsv = cv2.cvtColor(out, cv2.COLOR_RGB2HSV).astype(np.int32)
 
@@ -192,7 +196,7 @@ class SyntheticForgeryGenerator:
         cy = int(self.rng.integers(radius, h - radius + 1))
 
         ys, xs = np.ogrid[:h, :w]
-        mask = ((xs - cx) ** 2 + (ys - cy) ** 2 <= radius ** 2)
+        mask = (xs - cx) ** 2 + (ys - cy) ** 2 <= radius**2
 
         sigma = _NOISE_SIGMA[intensity]
         noise = self.rng.normal(0, sigma, (h, w, 3))

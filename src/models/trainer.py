@@ -7,10 +7,9 @@ Early stopping monitors validation F1. Best checkpoint saved to models/saved/.
 All metrics logged to MLflow.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
-import mlflow
 import numpy as np
 import torch
 import torch.nn as nn
@@ -18,8 +17,8 @@ from sklearn.metrics import f1_score, roc_auc_score
 from torch.optim import Adam
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
-from tqdm import tqdm
 
+import mlflow
 from src.models.classifier import DocumentClassifier
 
 
@@ -41,21 +40,21 @@ class TrainerConfig:
     mlflow_tracking_uri: str = "sqlite:///mlflow.db"
     mlflow_run_name: str = "efficientnet_b0_finetune"
     device: str = "cpu"
-    pos_weight: float | None = None   # BCEWithLogitsLoss weight for class imbalance
+    pos_weight: float | None = None  # BCEWithLogitsLoss weight for class imbalance
 
 
 class EarlyStopping:
     def __init__(self, patience: int, min_delta: float = 1e-4) -> None:
-        self.patience    = patience
-        self.min_delta   = min_delta
-        self.best_score  = -float("inf")
-        self.wait        = 0
+        self.patience = patience
+        self.min_delta = min_delta
+        self.best_score = -float("inf")
+        self.wait = 0
         self.should_stop = False
 
     def step(self, score: float) -> bool:
         if score > self.best_score + self.min_delta:
             self.best_score = score
-            self.wait       = 0
+            self.wait = 0
         else:
             self.wait += 1
             if self.wait >= self.patience:
@@ -71,17 +70,16 @@ class Trainer:
         val_loader: DataLoader,
         config: TrainerConfig | None = None,
     ) -> None:
-        self.model       = model
+        self.model = model
         self.train_loader = train_loader
-        self.val_loader   = val_loader
-        self.cfg         = config or TrainerConfig()
-        self.device      = torch.device(self.cfg.device)
+        self.val_loader = val_loader
+        self.cfg = config or TrainerConfig()
+        self.device = torch.device(self.cfg.device)
         self.model.to(self.device)
 
-        pw = torch.tensor([self.cfg.pos_weight]) if self.cfg.pos_weight else None
-        self.criterion = nn.BCELoss()   # model already has Sigmoid
+        self.criterion = nn.BCELoss()  # model already has Sigmoid
 
-        self._best_val_f1   = 0.0
+        self._best_val_f1 = -1.0
         self._best_ckpt_path = Path(self.cfg.checkpoint_dir) / self.cfg.checkpoint_name
 
     # ------------------------------------------------------------------
@@ -93,14 +91,16 @@ class Trainer:
         mlflow.set_tracking_uri(self.cfg.mlflow_tracking_uri)
 
         with mlflow.start_run(run_name=self.cfg.mlflow_run_name):
-            mlflow.log_params({
-                "backbone": "efficientnet_b0",
-                "phase_a_epochs": self.cfg.phase_a_epochs,
-                "phase_a_lr":     self.cfg.phase_a_lr,
-                "phase_b_epochs": self.cfg.phase_b_epochs,
-                "phase_b_lr":     self.cfg.phase_b_lr,
-                "device":         self.cfg.device,
-            })
+            mlflow.log_params(
+                {
+                    "backbone": "efficientnet_b0",
+                    "phase_a_epochs": self.cfg.phase_a_epochs,
+                    "phase_a_lr": self.cfg.phase_a_lr,
+                    "phase_b_epochs": self.cfg.phase_b_epochs,
+                    "phase_b_lr": self.cfg.phase_b_lr,
+                    "device": self.cfg.device,
+                }
+            )
 
             history = self._train_phase_a()
             history.extend(self._train_phase_b())
@@ -121,8 +121,9 @@ class Trainer:
         )
         print(f"\n--- Phase A: feature extraction ({self.cfg.phase_a_epochs} epochs) ---")
         print(f"    Trainable params: {self.model.trainable_params():,}")
-        return self._run_epochs(optimizer, scheduler=None,
-                                n_epochs=self.cfg.phase_a_epochs, phase="A")
+        return self._run_epochs(
+            optimizer, scheduler=None, n_epochs=self.cfg.phase_a_epochs, phase="A"
+        )
 
     def _train_phase_b(self) -> list[dict]:
         self.model.unfreeze_last_n_layers(self.cfg.phase_b_unfreeze_n)
@@ -131,12 +132,13 @@ class Trainer:
             lr=self.cfg.phase_b_lr,
         )
         scheduler = CosineAnnealingLR(optimizer, T_max=self.cfg.phase_b_epochs)
-        stopper   = EarlyStopping(patience=self.cfg.early_stopping_patience)
+        stopper = EarlyStopping(patience=self.cfg.early_stopping_patience)
 
         print(f"\n--- Phase B: fine-tuning ({self.cfg.phase_b_epochs} epochs) ---")
         print(f"    Trainable params: {self.model.trainable_params():,}")
-        return self._run_epochs(optimizer, scheduler, self.cfg.phase_b_epochs,
-                                phase="B", early_stopper=stopper)
+        return self._run_epochs(
+            optimizer, scheduler, self.cfg.phase_b_epochs, phase="B", early_stopper=stopper
+        )
 
     # ------------------------------------------------------------------
     # Epoch loop
@@ -154,20 +156,22 @@ class Trainer:
         for epoch in range(1, n_epochs + 1):
             train_loss = self._train_one_epoch(optimizer)
             val_metrics = self._evaluate(self.val_loader)
-            val_f1   = val_metrics["f1"]
+            val_f1 = val_metrics["f1"]
             val_loss = val_metrics["loss"]
 
             if scheduler is not None:
                 scheduler.step()
 
-            step = (epoch if phase == "A"
-                    else self.cfg.phase_a_epochs + epoch)
-            mlflow.log_metrics({
-                f"train_loss": train_loss,
-                f"val_loss":   val_loss,
-                f"val_f1":     val_f1,
-                f"val_auc":    val_metrics["auc"],
-            }, step=step)
+            step = epoch if phase == "A" else self.cfg.phase_a_epochs + epoch
+            mlflow.log_metrics(
+                {
+                    "train_loss": train_loss,
+                    "val_loss": val_loss,
+                    "val_f1": val_f1,
+                    "val_auc": val_metrics["auc"],
+                },
+                step=step,
+            )
 
             print(
                 f"  [{phase}] Epoch {epoch:>2}/{n_epochs}  "
@@ -177,16 +181,19 @@ class Trainer:
 
             if val_f1 > self._best_val_f1:
                 self._best_val_f1 = val_f1
-                self.model.save(self._best_ckpt_path, metadata={
-                    "epoch": step, "val_f1": val_f1, "phase": phase
-                })
+                self.model.save(
+                    self._best_ckpt_path, metadata={"epoch": step, "val_f1": val_f1, "phase": phase}
+                )
                 print(f"       ✓ Checkpoint saved (val_f1={val_f1:.4f})")
 
-            history.append({"phase": phase, "epoch": epoch,
-                             "train_loss": train_loss, **val_metrics})
+            history.append(
+                {"phase": phase, "epoch": epoch, "train_loss": train_loss, **val_metrics}
+            )
 
             if early_stopper is not None and early_stopper.step(val_f1):
-                print(f"  Early stopping at epoch {epoch} (patience={self.cfg.early_stopping_patience})")
+                print(
+                    f"  Early stopping at epoch {epoch} (patience={self.cfg.early_stopping_patience})"
+                )
                 break
 
         return history
@@ -199,7 +206,7 @@ class Trainer:
             labels = labels.to(self.device)
             optimizer.zero_grad()
             preds = self.model(images)
-            loss  = self.criterion(preds, labels)
+            loss = self.criterion(preds, labels)
             loss.backward()
             optimizer.step()
             total_loss += loss.item() * len(labels)
@@ -208,22 +215,22 @@ class Trainer:
     @torch.no_grad()
     def _evaluate(self, loader: DataLoader) -> dict:
         self.model.eval()
-        all_probs  = []
+        all_probs = []
         all_labels = []
         total_loss = 0.0
 
         for images, labels in loader:
             images = images.to(self.device)
             labels = labels.to(self.device)
-            probs  = self.model(images)
-            loss   = self.criterion(probs, labels)
+            probs = self.model(images)
+            loss = self.criterion(probs, labels)
             total_loss += loss.item() * len(labels)
             all_probs.append(probs.cpu().numpy())
             all_labels.append(labels.cpu().numpy())
 
-        all_probs  = np.concatenate(all_probs)
+        all_probs = np.concatenate(all_probs)
         all_labels = np.concatenate(all_labels)
-        preds      = (all_probs >= 0.5).astype(int)
+        preds = (all_probs >= 0.5).astype(int)
 
         # Guard for edge cases where all labels are one class (small dataset)
         try:
@@ -232,8 +239,8 @@ class Trainer:
             auc = 0.5
 
         return {
-            "loss":      total_loss / max(len(loader.dataset), 1),
-            "f1":        float(f1_score(all_labels, preds, zero_division=0)),
-            "auc":       auc,
-            "accuracy":  float((preds == all_labels).mean()),
+            "loss": total_loss / max(len(loader.dataset), 1),
+            "f1": float(f1_score(all_labels, preds, zero_division=0)),
+            "auc": auc,
+            "accuracy": float((preds == all_labels).mean()),
         }
