@@ -35,6 +35,13 @@ from src.reporting.pdf_report import PDFReportGenerator
 CHECKPOINT = Path(os.getenv("MODEL_CHECKPOINT", "models/saved/efficientnet_b0_best.pt"))
 DEVICE = os.getenv("MODEL_DEVICE", "cpu")
 
+# Registry-based loading (optional): set MODEL_REGISTRY_ALIAS to load the
+# champion model from the MLflow registry instead of the local checkpoint.
+REGISTRY_ALIAS = os.getenv("MODEL_REGISTRY_ALIAS")
+REGISTRY_NAME = os.getenv("MODEL_REGISTRY_NAME", "document-authenticator")
+TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "sqlite:///mlflow.db")
+REGISTRY_CACHE = Path(os.getenv("MODEL_REGISTRY_CACHE", "models/registry_cache"))
+
 # ---------------------------------------------------------------------------
 # Lifespan: load model once at startup
 # ---------------------------------------------------------------------------
@@ -42,11 +49,31 @@ DEVICE = os.getenv("MODEL_DEVICE", "cpu")
 _predictor: DocumentPredictor | None = None
 
 
+def _resolve_checkpoint() -> Path | None:
+    """Resolve the checkpoint path, preferring the registry when configured.
+
+    If MODEL_REGISTRY_ALIAS is set, download that alias from the MLflow
+    registry. On any failure (registry unreachable, alias missing) fall back
+    to the local checkpoint so the API stays serviceable.
+    """
+    if REGISTRY_ALIAS:
+        try:
+            from src.models.registry import ModelRegistry
+
+            registry = ModelRegistry(model_name=REGISTRY_NAME, tracking_uri=TRACKING_URI)
+            return registry.download_checkpoint(REGISTRY_CACHE, alias=REGISTRY_ALIAS)
+        except Exception as exc:
+            # Degrade gracefully to local checkpoint
+            print(f"Registry load failed ({exc}); falling back to local checkpoint.")
+    return CHECKPOINT if CHECKPOINT.exists() else None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _predictor
-    if CHECKPOINT.exists():
-        _predictor = DocumentPredictor(checkpoint=CHECKPOINT, device=DEVICE)
+    checkpoint = _resolve_checkpoint()
+    if checkpoint is not None:
+        _predictor = DocumentPredictor(checkpoint=checkpoint, device=DEVICE)
     else:
         _predictor = None
     yield

@@ -76,6 +76,7 @@ known-first-party = ["src", "api", "dashboard"]
 "dashboard/app.py"       = ["E402"]
 "src/models/trainer.py"  = ["I001"]
 "src/models/comparator.py" = ["I001"]
+"src/models/registry.py" = ["I001"]
 
 [tool.mypy]
 python_version = "3.11"

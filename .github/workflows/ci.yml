@@ -2,9 +2,16 @@ name: CI
 
 on:
   push:
-    branches: [main, "feature/**"]
+    branches: [main]
   pull_request:
     branches: [main]
+
+# Run CI once per ref. Feature branches are covered by the pull_request event;
+# push only runs on main (post-merge). A new run cancels the superseded one,
+# avoiding concurrent docker-build jobs racing on the same GHA cache key.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   lint:
