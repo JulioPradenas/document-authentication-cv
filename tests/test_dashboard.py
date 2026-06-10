@@ -154,5 +154,5 @@ class TestAppSmoke:
             at = AppTest.from_file(APP_PATH, default_timeout=30)
             at.run()
             assert not at.exception
-            success_texts = [s.value for s in at.success]
+            success_texts = [s.value for s in at.sidebar.success]
             assert any("modelo cargado" in t.lower() for t in success_texts)
