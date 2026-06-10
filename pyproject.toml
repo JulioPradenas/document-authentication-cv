@@ -63,8 +63,9 @@ ignore = ["E501"]
 known-first-party = ["src", "api", "dashboard"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*.py"    = ["E402", "F811"]
-"dashboard/app.py" = ["E402"]
+"tests/*.py"             = ["E402", "F811"]
+"dashboard/app.py"       = ["E402"]
+"src/models/trainer.py"  = ["I001"]
 
 [tool.mypy]
 python_version = "3.11"
