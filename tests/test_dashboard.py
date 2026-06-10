@@ -158,4 +158,6 @@ class TestAppSmoke:
         has_status = any("modelo cargado" in t.lower() for t in success_texts) or any(
             "checkpoint" in t.lower() for t in error_texts
         )
-        assert has_status, f"No model status in sidebar. success={success_texts}, error={error_texts}"
+        assert has_status, (
+            f"No model status in sidebar. success={success_texts}, error={error_texts}"
+        )
