@@ -10,20 +10,18 @@ Pipeline steps (each individually togglable):
 Output: HxWx3 float32 in [0,1] after normalize, or uint8 before normalize.
 """
 
-from dataclasses import dataclass, field
-from typing import Literal
+from dataclasses import dataclass
 
 import cv2
 import numpy as np
 
-
 _IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
-_IMAGENET_STD  = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+_IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
 
 @dataclass
 class PreprocessorConfig:
-    target_size: tuple[int, int] = (224, 224)   # (width, height)
+    target_size: tuple[int, int] = (224, 224)  # (width, height)
     perspective: bool = True
     denoise: bool = True
     clahe: bool = True
@@ -122,8 +120,7 @@ class DocumentPreprocessor:
         pts = quad.reshape(4, 2).astype(np.float32)
         pts_ordered = _order_points(pts)
 
-        dst = np.array([[0, 0], [w - 1, 0], [w - 1, h - 1], [0, h - 1]],
-                       dtype=np.float32)
+        dst = np.array([[0, 0], [w - 1, 0], [w - 1, h - 1], [0, h - 1]], dtype=np.float32)
         M = cv2.getPerspectiveTransform(pts_ordered, dst)
         warped = cv2.warpPerspective(image, M, (w, h), flags=cv2.INTER_CUBIC)
         return warped
@@ -186,13 +183,14 @@ class DocumentPreprocessor:
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _order_points(pts: np.ndarray) -> np.ndarray:
     """Return corners in order: top-left, top-right, bottom-right, bottom-left."""
     rect = np.zeros((4, 2), dtype=np.float32)
     s = pts.sum(axis=1)
-    rect[0] = pts[np.argmin(s)]   # top-left: smallest sum
-    rect[2] = pts[np.argmax(s)]   # bottom-right: largest sum
+    rect[0] = pts[np.argmin(s)]  # top-left: smallest sum
+    rect[2] = pts[np.argmax(s)]  # bottom-right: largest sum
     diff = np.diff(pts, axis=1)
-    rect[1] = pts[np.argmin(diff)]   # top-right: smallest diff
-    rect[3] = pts[np.argmax(diff)]   # bottom-left: largest diff
+    rect[1] = pts[np.argmin(diff)]  # top-right: smallest diff
+    rect[3] = pts[np.argmax(diff)]  # bottom-left: largest diff
     return rect

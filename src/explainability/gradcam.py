@@ -28,9 +28,9 @@ from src.models.classifier import DocumentClassifier
 Method = Literal["gradcam", "gradcam++", "eigencam"]
 
 _CAM_CLASSES = {
-    "gradcam":   GradCAM,
+    "gradcam": GradCAM,
     "gradcam++": GradCAMPlusPlus,
-    "eigencam":  EigenCAM,
+    "eigencam": EigenCAM,
 }
 
 
@@ -93,7 +93,7 @@ class GradCAMExplainer:
         for method in ("gradcam", "gradcam++", "eigencam"):
             cam, p = self.explain(image_tensor, method=method, threshold=threshold)
             cams.append(cam)
-            prob = p   # all methods share the same forward pass probability
+            prob = p  # all methods share the same forward pass probability
 
         ensemble = np.mean(cams, axis=0).astype(np.float32)
         return ensemble, prob
@@ -105,6 +105,5 @@ class GradCAMExplainer:
     ) -> list[tuple[np.ndarray, float]]:
         """Explain a batch of images. Returns list of (cam, prob) tuples."""
         return [
-            self.explain(image_tensors[i], method=method)
-            for i in range(image_tensors.shape[0])
+            self.explain(image_tensors[i], method=method) for i in range(image_tensors.shape[0])
         ]

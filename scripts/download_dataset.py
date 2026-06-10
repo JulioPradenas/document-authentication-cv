@@ -65,6 +65,7 @@ def download_direct(output_dir: Path) -> bool:
     print("Note: the full archive is ~8 GB — this may take a while.")
 
     try:
+
         def _progress(block_num: int, block_size: int, total_size: int) -> None:
             downloaded = block_num * block_size
             if total_size > 0:
@@ -108,7 +109,9 @@ def main() -> None:
     if output_dir.exists() and any(output_dir.iterdir()):
         file_count, total_bytes = count_files(output_dir)
         if file_count > 0:
-            print(f"Dataset already present at {output_dir} ({file_count} files). Skipping download.")
+            print(
+                f"Dataset already present at {output_dir} ({file_count} files). Skipping download."
+            )
             _print_summary(output_dir, file_count, total_bytes)
             return
 
@@ -131,13 +134,13 @@ def main() -> None:
         sys.exit(1)
 
     file_count, total_bytes = count_files(output_dir)
-    print(f"\nDownload complete.")
+    print("\nDownload complete.")
     _print_summary(output_dir, file_count, total_bytes)
 
 
 def _print_summary(output_dir: Path, file_count: int, total_bytes: int) -> None:
     size_mb = total_bytes / 1_048_576
-    print(f"\n--- Summary ---")
+    print("\n--- Summary ---")
     print(f"  Location : {output_dir.resolve()}")
     print(f"  Files    : {file_count:,}")
     print(f"  Size     : {size_mb:.1f} MB")

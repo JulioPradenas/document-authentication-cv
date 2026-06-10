@@ -59,8 +59,15 @@ def most_activated_region(cam: np.ndarray, top_k_percent: float = 10.0) -> dict:
     ys, xs = np.where(mask)
     if len(xs) == 0:
         h, w = cam.shape
-        return {"x0": 0, "y0": 0, "x1": w, "y1": h, "cx": w // 2, "cy": h // 2,
-                "mean_activation": float(cam.mean())}
+        return {
+            "x0": 0,
+            "y0": 0,
+            "x1": w,
+            "y1": h,
+            "cx": w // 2,
+            "cy": h // 2,
+            "mean_activation": float(cam.mean()),
+        }
 
     return {
         "x0": int(xs.min()),

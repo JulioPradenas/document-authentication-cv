@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import base64
 from io import BytesIO
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -18,10 +17,10 @@ from fastapi.testclient import TestClient
 
 from api.schemas import AuthenticateRequest, BatchAuthenticateRequest
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def make_b64_image(size: int = 64) -> str:
     arr = np.random.randint(0, 256, (size, size, 3), dtype=np.uint8)
@@ -58,9 +57,11 @@ def make_mock_predictor(prob: float = 0.8) -> MagicMock:
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def client():
     from api.main import app
+
     mock_pred = make_mock_predictor()
     # TestClient first (triggers lifespan), then patch _predictor with mock
     with TestClient(app) as c:
@@ -71,6 +72,7 @@ def client():
 # ---------------------------------------------------------------------------
 # 1. Schema validation
 # ---------------------------------------------------------------------------
+
 
 class TestSchemas:
     def test_valid_request(self):
@@ -109,6 +111,7 @@ class TestSchemas:
 # 2. GET /health
 # ---------------------------------------------------------------------------
 
+
 class TestHealth:
     def test_returns_200(self, client):
         c, _ = client
@@ -129,6 +132,7 @@ class TestHealth:
 # ---------------------------------------------------------------------------
 # 3. GET /model/info
 # ---------------------------------------------------------------------------
+
 
 class TestModelInfo:
     def test_returns_200(self, client):
@@ -155,6 +159,7 @@ class TestModelInfo:
 # ---------------------------------------------------------------------------
 # 4. POST /authenticate
 # ---------------------------------------------------------------------------
+
 
 class TestAuthenticate:
     def test_returns_200(self, client):
@@ -202,8 +207,15 @@ class TestAuthenticate:
             "threshold": 0.5,
             "inference_ms": 10.0,
             "gradcam_b64": "abc123",
-            "most_activated_region": {"x0": 0, "y0": 0, "x1": 10, "y1": 10,
-                                       "cx": 5, "cy": 5, "mean_activation": 0.7},
+            "most_activated_region": {
+                "x0": 0,
+                "y0": 0,
+                "x1": 10,
+                "y1": 10,
+                "cx": 5,
+                "cy": 5,
+                "mean_activation": 0.7,
+            },
         }
         data = c.post(
             "/authenticate",
@@ -215,6 +227,7 @@ class TestAuthenticate:
 # ---------------------------------------------------------------------------
 # 5. POST /authenticate/batch
 # ---------------------------------------------------------------------------
+
 
 class TestBatch:
     def test_returns_200(self, client):
@@ -249,8 +262,10 @@ class TestBatch:
 # 6. Model not loaded
 # ---------------------------------------------------------------------------
 
+
 def test_health_when_no_model():
     from api.main import app
+
     with TestClient(app) as c:
         with patch("api.main._predictor", None):
             resp = c.get("/health")
@@ -259,6 +274,7 @@ def test_health_when_no_model():
 
 def test_authenticate_when_no_model():
     from api.main import app
+
     with TestClient(app) as c:
         with patch("api.main._predictor", None):
             resp = c.post("/authenticate", json={"image_b64": make_b64_image()})

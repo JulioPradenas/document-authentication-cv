@@ -33,7 +33,7 @@ class DocumentClassifier(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.backbone(x).squeeze(1)   # (B,)
+        return self.backbone(x).squeeze(1)  # (B,)
 
     # ------------------------------------------------------------------
     # Freeze / unfreeze helpers
@@ -85,10 +85,13 @@ class DocumentClassifier(nn.Module):
     def save(self, path: Path, metadata: dict | None = None) -> None:
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        torch.save({
-            "state_dict": self.state_dict(),
-            "metadata": metadata or {},
-        }, path)
+        torch.save(
+            {
+                "state_dict": self.state_dict(),
+                "metadata": metadata or {},
+            },
+            path,
+        )
 
     @classmethod
     def load(cls, path: Path, device: str = "cpu") -> "DocumentClassifier":

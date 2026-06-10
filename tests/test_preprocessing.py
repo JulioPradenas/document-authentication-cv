@@ -17,10 +17,10 @@ from src.preprocessing.pipeline import (
     _order_points,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 def make_image(h: int = 224, w: int = 224, seed: int = 0) -> np.ndarray:
     rng = np.random.default_rng(seed)
@@ -54,6 +54,7 @@ def large_img() -> np.ndarray:
 # 1. Output shape and dtype
 # ---------------------------------------------------------------------------
 
+
 def test_process_output_shape_normalized(default_preprocessor, large_img):
     result = default_preprocessor.process(large_img)
     assert result.shape == (224, 224, 3)
@@ -80,6 +81,7 @@ def test_process_already_target_size(default_preprocessor, square_img):
 # ---------------------------------------------------------------------------
 # 2. Individual steps
 # ---------------------------------------------------------------------------
+
 
 class TestResize:
     def test_resize_changes_dimensions(self):
@@ -211,6 +213,7 @@ class TestPerspective:
 # 3. Pipeline configuration flags
 # ---------------------------------------------------------------------------
 
+
 class TestPipelineFlags:
     def test_all_steps_disabled_except_normalize(self):
         cfg = PreprocessorConfig(
@@ -260,6 +263,7 @@ class TestPipelineFlags:
 # 4. Input is not mutated
 # ---------------------------------------------------------------------------
 
+
 def test_process_does_not_mutate_input(default_preprocessor):
     img = make_image(300, 300)
     original = img.copy()
@@ -271,8 +275,9 @@ def test_process_does_not_mutate_input(default_preprocessor):
 # 5. Performance — under 100ms per image on CPU (generous margin for CI)
 # ---------------------------------------------------------------------------
 
+
 def test_processing_time_under_threshold():
-    cfg = PreprocessorConfig(perspective=False)   # skip perspective for speed test
+    cfg = PreprocessorConfig(perspective=False)  # skip perspective for speed test
     proc = DocumentPreprocessor(cfg)
     img = make_image(480, 640)
 
@@ -294,13 +299,14 @@ def test_processing_time_under_threshold():
 # 6. Helper function
 # ---------------------------------------------------------------------------
 
+
 def test_order_points_top_left_has_smallest_sum():
     pts = np.array([[100, 100], [0, 100], [0, 0], [100, 0]], dtype=np.float32)
     ordered = _order_points(pts)
-    assert tuple(ordered[0]) == (0.0, 0.0)   # top-left
+    assert tuple(ordered[0]) == (0.0, 0.0)  # top-left
 
 
 def test_order_points_bottom_right_has_largest_sum():
     pts = np.array([[100, 100], [0, 100], [0, 0], [100, 0]], dtype=np.float32)
     ordered = _order_points(pts)
-    assert tuple(ordered[2]) == (100.0, 100.0)   # bottom-right
+    assert tuple(ordered[2]) == (100.0, 100.0)  # bottom-right

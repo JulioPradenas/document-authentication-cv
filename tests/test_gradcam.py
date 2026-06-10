@@ -18,10 +18,10 @@ from src.explainability.visualizer import (
 )
 from src.models.classifier import DocumentClassifier
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(scope="module")
 def model() -> DocumentClassifier:
@@ -48,6 +48,7 @@ def make_image(seed: int = 0) -> np.ndarray:
 # ---------------------------------------------------------------------------
 # 1. GradCAMExplainer.explain() — output shape and value range
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize("method", ["gradcam", "gradcam++", "eigencam"])
 def test_explain_cam_shape(explainer, method):
@@ -80,7 +81,7 @@ def test_explain_prob_range(explainer, method):
 
 def test_explain_accepts_3d_tensor(explainer):
     """Should accept (3, H, W) and auto-unsqueeze."""
-    tensor = make_tensor().squeeze(0)   # (3, 224, 224)
+    tensor = make_tensor().squeeze(0)  # (3, 224, 224)
     cam, prob = explainer.explain(tensor)
     assert cam.shape == (224, 224)
     assert 0.0 <= prob <= 1.0
@@ -89,6 +90,7 @@ def test_explain_accepts_3d_tensor(explainer):
 # ---------------------------------------------------------------------------
 # 2. Ensemble
 # ---------------------------------------------------------------------------
+
 
 def test_ensemble_shape(explainer):
     tensor = make_tensor()
@@ -114,14 +116,15 @@ def test_ensemble_differs_from_single(explainer):
     """Ensemble average should generally differ from any single method."""
     tensor = make_tensor(seed=7)
     cam_single, _ = explainer.explain(tensor, method="gradcam")
-    cam_ens,    _ = explainer.explain_ensemble(tensor)
+    cam_ens, _ = explainer.explain_ensemble(tensor)
     # They could theoretically be equal but that's astronomically unlikely
-    assert not np.allclose(cam_single, cam_ens, atol=1e-6) or True   # non-blocking
+    assert not np.allclose(cam_single, cam_ens, atol=1e-6) or True  # non-blocking
 
 
 # ---------------------------------------------------------------------------
 # 3. Batch explain
 # ---------------------------------------------------------------------------
+
 
 def test_explain_batch_length(explainer):
     batch = torch.rand(3, 3, 224, 224)
@@ -141,6 +144,7 @@ def test_explain_batch_shapes(explainer):
 # 4. overlay_heatmap
 # ---------------------------------------------------------------------------
 
+
 def test_overlay_shape():
     img = make_image()
     cam = np.random.rand(224, 224).astype(np.float32)
@@ -157,15 +161,15 @@ def test_overlay_dtype():
 
 def test_overlay_differs_from_original():
     img = make_image()
-    cam = np.ones((224, 224), dtype=np.float32)   # full activation
+    cam = np.ones((224, 224), dtype=np.float32)  # full activation
     result = overlay_heatmap(img, cam)
     assert not np.array_equal(result, img)
 
 
 def test_overlay_resizes_cam():
     """overlay_heatmap should resize cam to match image dimensions."""
-    img = make_image()   # 224×224
-    cam = np.random.rand(7, 7).astype(np.float32)   # raw EfficientNet output size
+    img = make_image()  # 224×224
+    cam = np.random.rand(7, 7).astype(np.float32)  # raw EfficientNet output size
     result = overlay_heatmap(img, cam)
     assert result.shape == (224, 224, 3)
 
@@ -173,6 +177,7 @@ def test_overlay_resizes_cam():
 # ---------------------------------------------------------------------------
 # 5. cam_to_heatmap
 # ---------------------------------------------------------------------------
+
 
 def test_cam_to_heatmap_shape():
     cam = np.random.rand(224, 224).astype(np.float32)
@@ -189,6 +194,7 @@ def test_cam_to_heatmap_dtype():
 # ---------------------------------------------------------------------------
 # 6. most_activated_region
 # ---------------------------------------------------------------------------
+
 
 def test_most_activated_region_keys():
     cam = np.random.rand(224, 224).astype(np.float32)

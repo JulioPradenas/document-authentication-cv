@@ -15,26 +15,28 @@ from torch.utils.data import DataLoader, Dataset
 
 from src.preprocessing.pipeline import DocumentPreprocessor, PreprocessorConfig
 
-
 # ---------------------------------------------------------------------------
 # Albumentations pipelines
 # ---------------------------------------------------------------------------
 
+
 def _train_transform(size: int = 224) -> A.Compose:
-    return A.Compose([
-        A.HorizontalFlip(p=0.5),
-        A.RandomBrightnessContrast(p=0.3),
-        A.GaussNoise(p=0.2),
-        A.RandomRotate90(p=0.3),
-        A.CoarseDropout(
-            num_holes_range=(1, 4),
-            hole_height_range=(0.05, 0.125),
-            hole_width_range=(0.05, 0.125),
-            fill=0,
-            p=0.2,
-        ),
-        ToTensorV2(),
-    ])
+    return A.Compose(
+        [
+            A.HorizontalFlip(p=0.5),
+            A.RandomBrightnessContrast(p=0.3),
+            A.GaussNoise(p=0.2),
+            A.RandomRotate90(p=0.3),
+            A.CoarseDropout(
+                num_holes_range=(1, 4),
+                hole_height_range=(0.05, 0.125),
+                hole_width_range=(0.05, 0.125),
+                fill=0,
+                p=0.2,
+            ),
+            ToTensorV2(),
+        ]
+    )
 
 
 def _val_transform() -> A.Compose:
@@ -44,6 +46,7 @@ def _val_transform() -> A.Compose:
 # ---------------------------------------------------------------------------
 # Dataset
 # ---------------------------------------------------------------------------
+
 
 class DocumentDataset(Dataset):
     """Loads document images from disk and applies preprocessing + augmentation.
@@ -93,6 +96,7 @@ class DocumentDataset(Dataset):
 # Factory function
 # ---------------------------------------------------------------------------
 
+
 def create_dataloaders(
     data_dir: Path,
     batch_size: int = 32,
@@ -112,44 +116,48 @@ def create_dataloaders(
     Returns:
         (train_loader, val_loader, test_loader)
     """
-    authentic_paths = sorted((data_dir / "authentic").glob("*.png")) + \
-                      sorted((data_dir / "authentic").glob("*.jpg"))
-    forged_paths    = sorted((data_dir / "forged").glob("*.png")) + \
-                      sorted((data_dir / "forged").glob("*.jpg"))
+    authentic_paths = sorted((data_dir / "authentic").glob("*.png")) + sorted(
+        (data_dir / "authentic").glob("*.jpg")
+    )
+    forged_paths = sorted((data_dir / "forged").glob("*.png")) + sorted(
+        (data_dir / "forged").glob("*.jpg")
+    )
 
-    all_paths  = authentic_paths + forged_paths
+    all_paths = authentic_paths + forged_paths
     all_labels = [0] * len(authentic_paths) + [1] * len(forged_paths)
 
     # Deterministic shuffle
     rng = np.random.default_rng(seed)
     idx = rng.permutation(len(all_paths))
-    all_paths  = [all_paths[i]  for i in idx]
+    all_paths = [all_paths[i] for i in idx]
     all_labels = [all_labels[i] for i in idx]
 
-    n      = len(all_paths)
+    n = len(all_paths)
     n_train = int(n * train_ratio)
-    n_val   = int(n * val_ratio)
+    n_val = int(n * val_ratio)
 
-    train_paths  = all_paths[:n_train]
+    train_paths = all_paths[:n_train]
     train_labels = all_labels[:n_train]
-    val_paths    = all_paths[n_train : n_train + n_val]
-    val_labels   = all_labels[n_train : n_train + n_val]
-    test_paths   = all_paths[n_train + n_val :]
-    test_labels  = all_labels[n_train + n_val :]
+    val_paths = all_paths[n_train : n_train + n_val]
+    val_labels = all_labels[n_train : n_train + n_val]
+    test_paths = all_paths[n_train + n_val :]
+    test_labels = all_labels[n_train + n_val :]
 
     cfg = preprocessor_cfg or PreprocessorConfig()
     preprocessor = DocumentPreprocessor(cfg)
 
-    train_ds = DocumentDataset(train_paths, train_labels, preprocessor,
-                                augment=_train_transform())
-    val_ds   = DocumentDataset(val_paths,   val_labels,   preprocessor)
-    test_ds  = DocumentDataset(test_paths,  test_labels,  preprocessor)
+    train_ds = DocumentDataset(train_paths, train_labels, preprocessor, augment=_train_transform())
+    val_ds = DocumentDataset(val_paths, val_labels, preprocessor)
+    test_ds = DocumentDataset(test_paths, test_labels, preprocessor)
 
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,
-                               num_workers=num_workers, pin_memory=False)
-    val_loader   = DataLoader(val_ds,   batch_size=batch_size, shuffle=False,
-                               num_workers=num_workers, pin_memory=False)
-    test_loader  = DataLoader(test_ds,  batch_size=batch_size, shuffle=False,
-                               num_workers=num_workers, pin_memory=False)
+    train_loader = DataLoader(
+        train_ds, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=False
+    )
+    val_loader = DataLoader(
+        val_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=False
+    )
+    test_loader = DataLoader(
+        test_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=False
+    )
 
     return train_loader, val_loader, test_loader

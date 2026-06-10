@@ -22,7 +22,6 @@ import struct
 import zlib
 from pathlib import Path
 
-
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -36,6 +35,7 @@ OUTPUT_DIR = Path("data/samples")
 # ---------------------------------------------------------------------------
 # Stdlib-only minimal PNG writer
 # ---------------------------------------------------------------------------
+
 
 def _png_chunk(chunk_type: bytes, data: bytes) -> bytes:
     length = struct.pack(">I", len(data))
@@ -67,6 +67,7 @@ def _write_png_stdlib(path: Path, pixels: list[list[tuple[int, int, int]]]) -> N
 # Pixel-level drawing helpers (stdlib)
 # ---------------------------------------------------------------------------
 
+
 def _make_canvas(
     width: int, height: int, color: tuple[int, int, int]
 ) -> list[list[tuple[int, int, int]]]:
@@ -75,7 +76,10 @@ def _make_canvas(
 
 def _fill_rect(
     pixels: list[list[tuple[int, int, int]]],
-    x0: int, y0: int, x1: int, y1: int,
+    x0: int,
+    y0: int,
+    x1: int,
+    y1: int,
     color: tuple[int, int, int],
 ) -> None:
     for y in range(max(0, y0), min(HEIGHT, y1)):
@@ -86,7 +90,10 @@ def _fill_rect(
 def _add_noise_patch(
     pixels: list[list[tuple[int, int, int]]],
     rng: random.Random,
-    x0: int, y0: int, x1: int, y1: int,
+    x0: int,
+    y0: int,
+    x1: int,
+    y1: int,
     intensity: int = 60,
 ) -> None:
     """Add random noise to a rectangular region."""
@@ -105,7 +112,10 @@ def _add_noise_patch(
 
 def _color_shift_patch(
     pixels: list[list[tuple[int, int, int]]],
-    x0: int, y0: int, x1: int, y1: int,
+    x0: int,
+    y0: int,
+    x1: int,
+    y1: int,
     shift: tuple[int, int, int] = (80, -30, -30),
 ) -> None:
     """Shift colors in a rectangular region (simulates hue tampering)."""
@@ -123,6 +133,7 @@ def _color_shift_patch(
 # ---------------------------------------------------------------------------
 # Image generators
 # ---------------------------------------------------------------------------
+
 
 def _make_authentic(rng: random.Random) -> list[list[tuple[int, int, int]]]:
     """Light document background with colored rectangles (text lines, stamps)."""
@@ -152,7 +163,10 @@ def _make_authentic(rng: random.Random) -> list[list[tuple[int, int, int]]]:
     # Inner lighter area
     _fill_rect(
         pixels,
-        stamp_x + 5, stamp_y + 5, stamp_x + 35, stamp_y + 35,
+        stamp_x + 5,
+        stamp_y + 5,
+        stamp_x + 35,
+        stamp_y + 35,
         (min(255, stamp_r[0] + 60), min(255, stamp_r[1] + 60), min(255, stamp_r[2] + 40)),
     )
 
@@ -187,6 +201,7 @@ def _make_forged(rng: random.Random) -> list[list[tuple[int, int, int]]]:
 # numpy + PIL path (preferred when available)
 # ---------------------------------------------------------------------------
 
+
 def _try_numpy_pil(output_dir: Path, rng_seed: int) -> bool:
     try:
         import numpy as np
@@ -208,8 +223,8 @@ def _try_numpy_pil(output_dir: Path, rng_seed: int) -> bool:
         bg = rng.integers(230, 256, size=3).tolist()
         img = np.full((HEIGHT, WIDTH, 3), bg, dtype=np.uint8)
         # Border
-        img[10:HEIGHT-10, 10:WIDTH-10] = [max(0, c - 10) for c in bg]
-        img[12:HEIGHT-12, 12:WIDTH-12] = bg
+        img[10 : HEIGHT - 10, 10 : WIDTH - 10] = [max(0, c - 10) for c in bg]
+        img[12 : HEIGHT - 12, 12 : WIDTH - 12] = bg
 
         n_lines = int(rng.integers(5, 10))
         for j in range(n_lines):
@@ -223,9 +238,13 @@ def _try_numpy_pil(output_dir: Path, rng_seed: int) -> bool:
 
         stamp_x = int(rng.integers(120, 171))
         stamp_y = int(rng.integers(130, 171))
-        stamp_color = [int(rng.integers(0, 81)), int(rng.integers(0, 81)), int(rng.integers(100, 201))]
-        img[stamp_y:stamp_y+40, stamp_x:stamp_x+40] = stamp_color
-        img[stamp_y+5:stamp_y+35, stamp_x+5:stamp_x+35] = [
+        stamp_color = [
+            int(rng.integers(0, 81)),
+            int(rng.integers(0, 81)),
+            int(rng.integers(100, 201)),
+        ]
+        img[stamp_y : stamp_y + 40, stamp_x : stamp_x + 40] = stamp_color
+        img[stamp_y + 5 : stamp_y + 35, stamp_x + 5 : stamp_x + 35] = [
             min(255, stamp_color[0] + 60),
             min(255, stamp_color[1] + 60),
             min(255, stamp_color[2] + 40),
@@ -238,8 +257,8 @@ def _try_numpy_pil(output_dir: Path, rng_seed: int) -> bool:
         # Forged: copy authentic logic with same seed offset, then perturb
         bg = rng.integers(230, 256, size=3).tolist()
         img = np.full((HEIGHT, WIDTH, 3), bg, dtype=np.uint8)
-        img[10:HEIGHT-10, 10:WIDTH-10] = [max(0, c - 10) for c in bg]
-        img[12:HEIGHT-12, 12:WIDTH-12] = bg
+        img[10 : HEIGHT - 10, 10 : WIDTH - 10] = [max(0, c - 10) for c in bg]
+        img[12 : HEIGHT - 12, 12 : WIDTH - 12] = bg
 
         n_lines = int(rng.integers(5, 10))
         for j in range(n_lines):
@@ -253,9 +272,13 @@ def _try_numpy_pil(output_dir: Path, rng_seed: int) -> bool:
 
         stamp_x = int(rng.integers(120, 171))
         stamp_y = int(rng.integers(130, 171))
-        stamp_color = [int(rng.integers(0, 81)), int(rng.integers(0, 81)), int(rng.integers(100, 201))]
-        img[stamp_y:stamp_y+40, stamp_x:stamp_x+40] = stamp_color
-        img[stamp_y+5:stamp_y+35, stamp_x+5:stamp_x+35] = [
+        stamp_color = [
+            int(rng.integers(0, 81)),
+            int(rng.integers(0, 81)),
+            int(rng.integers(100, 201)),
+        ]
+        img[stamp_y : stamp_y + 40, stamp_x : stamp_x + 40] = stamp_color
+        img[stamp_y + 5 : stamp_y + 35, stamp_x + 5 : stamp_x + 35] = [
             min(255, stamp_color[0] + 60),
             min(255, stamp_color[1] + 60),
             min(255, stamp_color[2] + 40),
@@ -287,6 +310,7 @@ def _try_numpy_pil(output_dir: Path, rng_seed: int) -> bool:
 # stdlib fallback path
 # ---------------------------------------------------------------------------
 
+
 def _generate_stdlib(output_dir: Path, seed: int) -> None:
     rng = random.Random(seed)
 
@@ -313,6 +337,7 @@ def _generate_stdlib(output_dir: Path, seed: int) -> None:
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     output_dir = OUTPUT_DIR

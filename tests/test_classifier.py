@@ -17,10 +17,10 @@ torch = pytest.importorskip("torch", reason="PyTorch not installed")
 from src.models.classifier import DocumentClassifier
 from src.models.trainer import EarlyStopping, Trainer, TrainerConfig
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def make_model(pretrained: bool = False) -> DocumentClassifier:
     return DocumentClassifier(pretrained=pretrained)
@@ -42,6 +42,7 @@ def make_tiny_loader(n: int = 8, batch_size: int = 4) -> DataLoader:
 # ---------------------------------------------------------------------------
 # 1. DocumentClassifier — architecture and forward pass
 # ---------------------------------------------------------------------------
+
 
 class TestDocumentClassifier:
     def test_forward_output_shape(self):
@@ -90,6 +91,7 @@ class TestDocumentClassifier:
 # 2. freeze / unfreeze
 # ---------------------------------------------------------------------------
 
+
 class TestFreezeUnfreeze:
     def test_freeze_backbone_reduces_trainable(self):
         model = make_model()
@@ -126,6 +128,7 @@ class TestFreezeUnfreeze:
 # 3. Checkpoint save / load
 # ---------------------------------------------------------------------------
 
+
 class TestCheckpoint:
     def test_save_creates_file(self):
         model = make_model()
@@ -137,7 +140,7 @@ class TestCheckpoint:
 
     def test_load_restores_weights(self):
         model = make_model()
-        model.eval()   # disable dropout for deterministic comparison
+        model.eval()  # disable dropout for deterministic comparison
         images, _ = make_batch(2)
         with torch.no_grad():
             original_out = model(images).numpy()
@@ -171,6 +174,7 @@ class TestCheckpoint:
 # 4. EarlyStopping
 # ---------------------------------------------------------------------------
 
+
 class TestEarlyStopping:
     def test_no_stop_when_improving(self):
         stopper = EarlyStopping(patience=3)
@@ -188,9 +192,9 @@ class TestEarlyStopping:
     def test_resets_wait_on_improvement(self):
         stopper = EarlyStopping(patience=2)
         stopper.step(0.8)
-        stopper.step(0.79)   # wait=1
-        stopper.step(0.81)   # improvement → wait=0
-        stopped = stopper.step(0.80)   # wait=1
+        stopper.step(0.79)  # wait=1
+        stopper.step(0.81)  # improvement → wait=0
+        stopped = stopper.step(0.80)  # wait=1
         assert not stopped
 
 
@@ -198,11 +202,12 @@ class TestEarlyStopping:
 # 5. Trainer — one-epoch smoke test (tiny data, no MLflow remote)
 # ---------------------------------------------------------------------------
 
+
 class TestTrainer:
     def _make_trainer(self, tmpdir: Path) -> Trainer:
-        model   = make_model()
-        loader  = make_tiny_loader(n=8, batch_size=4)
-        cfg     = TrainerConfig(
+        model = make_model()
+        loader = make_tiny_loader(n=8, batch_size=4)
+        cfg = TrainerConfig(
             phase_a_epochs=1,
             phase_b_epochs=1,
             early_stopping_patience=2,
@@ -223,16 +228,16 @@ class TestTrainer:
     def test_evaluate_returns_expected_keys(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             trainer = self._make_trainer(Path(tmpdir))
-            loader  = make_tiny_loader()
+            loader = make_tiny_loader()
             metrics = trainer._evaluate(loader)
         assert {"loss", "f1", "auc", "accuracy"} <= metrics.keys()
 
     def test_evaluate_metrics_in_range(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             trainer = self._make_trainer(Path(tmpdir))
-            loader  = make_tiny_loader()
+            loader = make_tiny_loader()
             metrics = trainer._evaluate(loader)
-        assert 0.0 <= metrics["f1"]       <= 1.0
-        assert 0.0 <= metrics["auc"]      <= 1.0
+        assert 0.0 <= metrics["f1"] <= 1.0
+        assert 0.0 <= metrics["auc"] <= 1.0
         assert 0.0 <= metrics["accuracy"] <= 1.0
         assert metrics["loss"] >= 0.0

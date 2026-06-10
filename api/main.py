@@ -29,9 +29,7 @@ from api.schemas import (
 # Configuration (override via env vars)
 # ---------------------------------------------------------------------------
 
-CHECKPOINT = Path(
-    os.getenv("MODEL_CHECKPOINT", "models/saved/efficientnet_b0_best.pt")
-)
+CHECKPOINT = Path(os.getenv("MODEL_CHECKPOINT", "models/saved/efficientnet_b0_best.pt"))
 DEVICE = os.getenv("MODEL_DEVICE", "cpu")
 
 # ---------------------------------------------------------------------------
@@ -76,6 +74,7 @@ def _get_predictor() -> DocumentPredictor:
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
 
 @app.get("/health", response_model=HealthResponse, tags=["ops"])
 def health() -> HealthResponse:

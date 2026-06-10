@@ -6,13 +6,10 @@ and returns structured results ready for plotting and reporting.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import numpy as np
 import torch
 from sklearn.metrics import (
     accuracy_score,
-    auc,
     average_precision_score,
     confusion_matrix,
     f1_score,
@@ -36,7 +33,7 @@ class ModelEvaluator:
     """
 
     def __init__(self, model: DocumentClassifier, device: str = "cpu") -> None:
-        self.model  = model
+        self.model = model
         self.device = torch.device(device)
         self.model.to(self.device)
         self.model.eval()
@@ -87,7 +84,7 @@ class ModelEvaluator:
         probs, labels = self._collect_predictions(loader)
 
         thresholds = np.linspace(0.1, 0.9, 81)
-        best_th    = 0.5
+        best_th = 0.5
         best_score = -1.0
 
         for th in thresholds:
@@ -103,9 +100,9 @@ class ModelEvaluator:
 
             if score > best_score:
                 best_score = score
-                best_th    = float(th)
+                best_th = float(th)
 
-        best_preds   = (probs >= best_th).astype(int)
+        best_preds = (probs >= best_th).astype(int)
         best_metrics = self._compute_metrics(probs, labels, best_preds, best_th)
         return best_th, best_metrics
 
@@ -138,13 +135,13 @@ class ModelEvaluator:
             if mask.sum() == 0:
                 continue
             t_labels = labels[mask]
-            t_preds  = preds[mask]
+            t_preds = preds[mask]
             results[t_name] = {
-                "precision":  float(precision_score(t_labels, t_preds, zero_division=0)),
-                "recall":     float(recall_score(t_labels, t_preds, zero_division=0)),
-                "f1":         float(f1_score(t_labels, t_preds, zero_division=0)),
-                "n_samples":  int(mask.sum()),
-                "n_correct":  int((t_labels == t_preds).sum()),
+                "precision": float(precision_score(t_labels, t_preds, zero_division=0)),
+                "recall": float(recall_score(t_labels, t_preds, zero_division=0)),
+                "f1": float(f1_score(t_labels, t_preds, zero_division=0)),
+                "n_samples": int(mask.sum()),
+                "n_correct": int((t_labels == t_preds).sum()),
             }
         return results
 
@@ -154,11 +151,11 @@ class ModelEvaluator:
 
     @torch.no_grad()
     def _collect_predictions(self, loader: DataLoader) -> tuple[np.ndarray, np.ndarray]:
-        all_probs  = []
+        all_probs = []
         all_labels = []
         for images, labels in loader:
             images = images.to(self.device)
-            probs  = self.model(images).cpu().numpy()
+            probs = self.model(images).cpu().numpy()
             all_probs.append(probs)
             all_labels.append(labels.numpy())
         return np.concatenate(all_probs), np.concatenate(all_labels).astype(int)
@@ -187,29 +184,29 @@ class ModelEvaluator:
             prec_curve = rec_curve = pr_thresholds = np.array([0.0, 1.0])
 
         return {
-            "probs":            probs,
-            "labels":           labels,
-            "preds":            preds,
-            "threshold":        threshold,
-            "accuracy":         float(accuracy_score(labels, preds)),
-            "precision":        float(precision_score(labels, preds, zero_division=0)),
-            "recall":           float(recall_score(labels, preds, zero_division=0)),
-            "f1":               float(f1_score(labels, preds, zero_division=0)),
-            "auc_roc":          auc_roc,
-            "auc_pr":           auc_pr,
+            "probs": probs,
+            "labels": labels,
+            "preds": preds,
+            "threshold": threshold,
+            "accuracy": float(accuracy_score(labels, preds)),
+            "precision": float(precision_score(labels, preds, zero_division=0)),
+            "recall": float(recall_score(labels, preds, zero_division=0)),
+            "f1": float(f1_score(labels, preds, zero_division=0)),
+            "auc_roc": auc_roc,
+            "auc_pr": auc_pr,
             "confusion_matrix": cm,
-            "roc_curve":        (fpr, tpr, roc_thresholds),
-            "pr_curve":         (prec_curve, rec_curve, pr_thresholds),
+            "roc_curve": (fpr, tpr, roc_thresholds),
+            "pr_curve": (prec_curve, rec_curve, pr_thresholds),
             "per_class": {
                 "authentic": {
-                    "precision": float(precision_score(1-labels, 1-preds, zero_division=0)),
-                    "recall":    float(recall_score(1-labels, 1-preds, zero_division=0)),
-                    "f1":        float(f1_score(1-labels, 1-preds, zero_division=0)),
+                    "precision": float(precision_score(1 - labels, 1 - preds, zero_division=0)),
+                    "recall": float(recall_score(1 - labels, 1 - preds, zero_division=0)),
+                    "f1": float(f1_score(1 - labels, 1 - preds, zero_division=0)),
                 },
                 "forged": {
                     "precision": float(precision_score(labels, preds, zero_division=0)),
-                    "recall":    float(recall_score(labels, preds, zero_division=0)),
-                    "f1":        float(f1_score(labels, preds, zero_division=0)),
+                    "recall": float(recall_score(labels, preds, zero_division=0)),
+                    "f1": float(f1_score(labels, preds, zero_division=0)),
                 },
             },
         }

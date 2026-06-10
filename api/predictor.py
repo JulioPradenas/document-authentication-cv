@@ -8,7 +8,6 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any
 
-import cv2
 import numpy as np
 import torch
 from PIL import Image
