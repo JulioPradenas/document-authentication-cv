@@ -89,11 +89,11 @@ class GradCAMExplainer:
             (ensemble_cam, prob): same format as explain().
         """
         cams = []
-        prob = None
+        prob: float = 0.0
         for method in ("gradcam", "gradcam++", "eigencam"):
             cam, p = self.explain(image_tensor, method=method, threshold=threshold)
             cams.append(cam)
-            prob = p  # all methods share the same forward pass probability
+            prob = p
 
         ensemble = np.mean(cams, axis=0).astype(np.float32)
         return ensemble, prob

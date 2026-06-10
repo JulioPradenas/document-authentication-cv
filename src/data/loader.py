@@ -75,7 +75,7 @@ class DocumentDataset(Dataset):
         return len(self.paths)
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        img = cv2.imread(str(self.paths[idx]))
+        img: np.ndarray = cv2.imread(str(self.paths[idx]))  # type: ignore[assignment]
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
         # Preprocessing (perspective, denoise, CLAHE, resize, normalize)

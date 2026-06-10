@@ -6,7 +6,7 @@ import base64
 import time
 from io import BytesIO
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, cast
 
 import numpy as np
 import torch
@@ -74,7 +74,12 @@ class DocumentPredictor:
         }
 
         if return_gradcam:
-            cam, _ = self._get_explainer().explain(tensor, method=gradcam_method)
+            explainer = self._get_explainer()
+            _Method = Literal["gradcam", "gradcam++", "eigencam"]
+            if gradcam_method == "ensemble":
+                cam, _ = explainer.explain_ensemble(tensor)
+            else:
+                cam, _ = explainer.explain(tensor, method=cast(_Method, gradcam_method))
             overlay = overlay_heatmap(image_rgb, cam)
             result["gradcam_b64"] = self._encode_image(overlay)
             result["most_activated_region"] = most_activated_region(cam)

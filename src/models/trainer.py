@@ -210,13 +210,14 @@ class Trainer:
             loss.backward()
             optimizer.step()
             total_loss += loss.item() * len(labels)
-        return total_loss / len(self.train_loader.dataset)
+        n = len(self.train_loader.dataset)  # type: ignore[arg-type]
+        return total_loss / n
 
     @torch.no_grad()
     def _evaluate(self, loader: DataLoader) -> dict:
         self.model.eval()
-        all_probs = []
-        all_labels = []
+        prob_chunks: list[np.ndarray] = []
+        label_chunks: list[np.ndarray] = []
         total_loss = 0.0
 
         for images, labels in loader:
@@ -225,11 +226,11 @@ class Trainer:
             probs = self.model(images)
             loss = self.criterion(probs, labels)
             total_loss += loss.item() * len(labels)
-            all_probs.append(probs.cpu().numpy())
-            all_labels.append(labels.cpu().numpy())
+            prob_chunks.append(probs.cpu().numpy())
+            label_chunks.append(labels.cpu().numpy())
 
-        all_probs = np.concatenate(all_probs)
-        all_labels = np.concatenate(all_labels)
+        all_probs: np.ndarray = np.concatenate(prob_chunks)
+        all_labels: np.ndarray = np.concatenate(label_chunks)
         preds = (all_probs >= 0.5).astype(int)
 
         # Guard for edge cases where all labels are one class (small dataset)
@@ -238,8 +239,9 @@ class Trainer:
         except ValueError:
             auc = 0.5
 
+        n_eval = len(loader.dataset)  # type: ignore[arg-type]
         return {
-            "loss": total_loss / max(len(loader.dataset), 1),
+            "loss": total_loss / max(n_eval, 1),
             "f1": float(f1_score(all_labels, preds, zero_division=0)),
             "auc": auc,
             "accuracy": float((preds == all_labels).mean()),
