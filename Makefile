@@ -1,4 +1,4 @@
-.PHONY: fix test run run-api run-dashboard install
+.PHONY: fix test run run-api run-dashboard install samples
 
 install:
 	uv sync --all-extras
@@ -17,3 +17,6 @@ run-api:
 
 run-dashboard:
 	uv run streamlit run dashboard/app.py --server.port 8501
+
+samples:
+	uv run python scripts/generate_samples.py

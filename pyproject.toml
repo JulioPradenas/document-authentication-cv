@@ -38,6 +38,9 @@ dev = [
 pdf = [
     "reportlab>=4.2",
 ]
+datasets = [
+    "midv500>=0.1",
+]
 
 [build-system]
 requires = ["hatchling"]

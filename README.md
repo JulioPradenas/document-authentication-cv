@@ -50,9 +50,26 @@ _TBD — populated after Phase 4 (training)_
 
 ## Dataset
 
-_TBD — populated after Phase 1 (EDA)_
+**MIDV-500** — 500 video clips covering 50 document types (passports, IDs, driver's licenses, etc.), captured under varied conditions. Each clip yields multiple frames used as training images.
 
-Dataset consists of authentic and forged fiscal stamp images. Raw data lives outside this repo (not tracked in git). See `scripts/download_data.py` for acquisition instructions.
+- 500 clips × 50 document classes = 15,000+ usable frames
+- Label strategy: original frames → **authentic**; synthetically perturbed frames (noise, color shift, geometric distortion) → **forged**
+- Raw data is **not committed** to this repo — `data/raw/` is gitignored
+
+Download the dataset:
+
+```bash
+# Requires the datasets extra: uv sync --extra datasets
+uv run python scripts/download_dataset.py
+# Or specify a custom output directory:
+uv run python scripts/download_dataset.py --output-dir data/raw/midv500
+```
+
+Generate synthetic test samples (no dataset required):
+
+```bash
+make samples
+```
 
 ## Tech Stack
 
