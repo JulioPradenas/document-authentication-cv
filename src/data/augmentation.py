@@ -113,16 +113,13 @@ class SyntheticForgeryGenerator:
         ys, xs = np.ogrid[:h, :w]
         mask = ((xs - cx) ** 2 + (ys - cy) ** 2 <= radius ** 2).astype(np.uint8)
 
-        # Convert RGB -> BGR -> HSV
-        bgr = cv2.cvtColor(out, cv2.COLOR_RGB2BGR)
-        hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV).astype(np.int32)
+        hsv = cv2.cvtColor(out, cv2.COLOR_RGB2HSV).astype(np.int32)
 
         hue_shift = _HUE_SHIFT[intensity]
         hsv[:, :, 0] = np.where(mask, (hsv[:, :, 0] + hue_shift) % 180, hsv[:, :, 0])
 
         hsv = hsv.astype(np.uint8)
-        bgr_shifted = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
-        rgb_shifted = cv2.cvtColor(bgr_shifted, cv2.COLOR_BGR2RGB)
+        rgb_shifted = cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)
 
         out[mask == 1] = rgb_shifted[mask == 1]
         return out
