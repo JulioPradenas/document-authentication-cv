@@ -27,6 +27,10 @@ class AuthenticateRequest(BaseModel):
         le=1.0,
         description="Decision threshold for 'forged' label.",
     )
+    check_quality: bool = Field(
+        default=False,
+        description="Assess input quality first; reject low-quality images (label='rejected').",
+    )
 
     @field_validator("image_b64")
     @classmethod
@@ -49,7 +53,7 @@ class AuthenticateRequest(BaseModel):
 
 
 class AuthenticateResponse(BaseModel):
-    label: str = Field(..., description="'authentic' or 'forged'")
+    label: str = Field(..., description="'authentic', 'forged', or 'rejected'")
     probability: float = Field(..., description="P(forged) ∈ [0, 1]")
     threshold: float
     gradcam_b64: str | None = Field(
@@ -61,6 +65,10 @@ class AuthenticateResponse(BaseModel):
         description="Bounding box of the highest-activation region.",
     )
     inference_ms: float = Field(..., description="Inference latency in milliseconds.")
+    quality: dict[str, Any] | None = Field(
+        default=None,
+        description="Quality assessment report (only when check_quality=True).",
+    )
 
 
 class BatchAuthenticateRequest(BaseModel):

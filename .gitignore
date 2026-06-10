@@ -25,6 +25,8 @@ data/augmented/*
 
 # MLflow tracking
 mlflow/
+mlflow.db
+mlruns/
 
 # Generated reports
 reports/pdf/*

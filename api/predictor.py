@@ -16,6 +16,7 @@ from src.explainability.gradcam import GradCAMExplainer
 from src.explainability.visualizer import most_activated_region, overlay_heatmap
 from src.models.classifier import DocumentClassifier
 from src.preprocessing.pipeline import DocumentPreprocessor, PreprocessorConfig
+from src.preprocessing.quality import ImageQualityAssessor, QualityConfig
 
 
 class DocumentPredictor:
@@ -25,6 +26,7 @@ class DocumentPredictor:
         checkpoint: Path to the saved .pt checkpoint.
         device: 'cpu', 'cuda', or 'mps'.
         preprocessor_cfg: Optional PreprocessorConfig override.
+        quality_cfg: Optional QualityConfig override for input gating.
     """
 
     def __init__(
@@ -32,12 +34,14 @@ class DocumentPredictor:
         checkpoint: Path | str,
         device: str = "cpu",
         preprocessor_cfg: PreprocessorConfig | None = None,
+        quality_cfg: QualityConfig | None = None,
     ) -> None:
         self.device = device
         self.checkpoint = Path(checkpoint)
         self.model = DocumentClassifier.load(self.checkpoint, device=device)
         self.model.eval()
         self.preprocessor = DocumentPreprocessor(preprocessor_cfg or PreprocessorConfig())
+        self.quality_assessor = ImageQualityAssessor(quality_cfg or QualityConfig())
         self._explainer: GradCAMExplainer | None = None
 
     # ------------------------------------------------------------------
@@ -50,30 +54,46 @@ class DocumentPredictor:
         threshold: float = 0.5,
         return_gradcam: bool = False,
         gradcam_method: str = "gradcam++",
+        check_quality: bool = False,
     ) -> dict[str, Any]:
         """Run full inference pipeline on a base64-encoded image.
 
+        Args:
+            check_quality: If True, assess input quality first. When the image
+                fails the gate, label becomes 'rejected' and Grad-CAM is skipped
+                (the probability is still reported, but flagged as unreliable).
+
         Returns:
             dict with keys: label, probability, threshold, inference_ms,
-            and optionally gradcam_b64, most_activated_region.
+            quality (when check_quality=True), and optionally gradcam_b64,
+            most_activated_region.
         """
         image_rgb = self._decode_image(image_b64)
+
+        quality_report = self.quality_assessor.assess(image_rgb) if check_quality else None
+        rejected = quality_report is not None and not quality_report.passed
 
         t0 = time.perf_counter()
         tensor = self._preprocess(image_rgb)
         prob = float(self.model.predict_proba(tensor.to(self.device)).item())
         inference_ms = (time.perf_counter() - t0) * 1e3
 
+        if rejected:
+            label = "rejected"
+        else:
+            label = "forged" if prob >= threshold else "authentic"
+
         result: dict[str, Any] = {
-            "label": "forged" if prob >= threshold else "authentic",
+            "label": label,
             "probability": round(prob, 6),
             "threshold": threshold,
             "inference_ms": round(inference_ms, 2),
             "gradcam_b64": None,
             "most_activated_region": None,
+            "quality": quality_report.to_dict() if quality_report else None,
         }
 
-        if return_gradcam:
+        if return_gradcam and not rejected:
             explainer = self._get_explainer()
             _Method = Literal["gradcam", "gradcam++", "eigencam"]
             if gradcam_method == "ensemble":

@@ -115,17 +115,28 @@ def load_uploaded_image(uploaded_file) -> tuple[list[Image.Image], str]:
 
 
 def _etiqueta_color(label: str) -> str:
-    return "🟢" if label == "authentic" else "🔴"
+    if label == "authentic":
+        return "🟢"
+    if label == "rejected":
+        return "⚠️"
+    return "🔴"
 
 
 def _etiqueta_es(label: str) -> str:
-    return "Auténtico" if label == "authentic" else "Falsificado"
+    if label == "authentic":
+        return "Auténtico"
+    if label == "rejected":
+        return "Rechazado (baja calidad)"
+    return "Falsificado"
+
+
+_LABEL_COLORS = {"authentic": "#2ecc71", "rejected": "#f39c12", "forged": "#e74c3c"}
 
 
 def _render_result_card(result: dict, image: Image.Image) -> None:
     label = result["label"]
     prob = result["probability"]
-    color = "#2ecc71" if label == "authentic" else "#e74c3c"
+    color = _LABEL_COLORS.get(label, "#e74c3c")
     etiqueta = _etiqueta_es(label)
 
     col1, col2 = st.columns([1, 1])
@@ -153,6 +164,20 @@ def _render_result_card(result: dict, image: Image.Image) -> None:
         st.caption(
             f"Umbral: {result['threshold']:.2f}  |  Latencia: {result['inference_ms']:.1f} ms"
         )
+
+        quality = result.get("quality")
+        if quality is not None:
+            if quality["passed"]:
+                st.caption(
+                    f"Calidad: ✅ nitidez {quality['sharpness']:.0f}  ·  "
+                    f"brillo {quality['brightness']:.0f}  ·  "
+                    f"{quality['resolution'][1]}×{quality['resolution'][0]}px"
+                )
+            else:
+                st.warning(
+                    "Imagen rechazada por baja calidad:\n\n"
+                    + "\n".join(f"- {reason}" for reason in quality["reasons"])
+                )
 
         if result.get("gradcam_b64"):
             st.image(
@@ -251,6 +276,11 @@ gradcam_method = st.sidebar.selectbox(
     options=["gradcam++", "gradcam", "eigencam", "ensemble"],
     disabled=not show_gradcam,
 )
+check_quality = st.sidebar.toggle(
+    "Verificar calidad de imagen",
+    value=True,
+    help="Rechaza imágenes borrosas, mal expuestas o de baja resolución antes de analizar",
+)
 
 st.sidebar.divider()
 if st.sidebar.button("Limpiar historial", use_container_width=True):
@@ -297,6 +327,7 @@ with tab_verify:
                         threshold=threshold,
                         return_gradcam=show_gradcam,
                         gradcam_method=gradcam_method,
+                        check_quality=check_quality,
                     )
                 st.session_state.history.append(result)
                 _render_result_card(result, image)
@@ -335,6 +366,7 @@ with tab_demo:
                     threshold=threshold,
                     return_gradcam=show_gradcam,
                     gradcam_method=gradcam_method,
+                    check_quality=check_quality,
                 )
                 result["_filename"] = path.name
                 st.session_state.history.append(result)
