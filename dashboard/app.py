@@ -1,6 +1,6 @@
-"""Streamlit dashboard — Document Authentication.
+"""Streamlit dashboard — Autenticación de Documentos.
 
-Run:
+Ejecutar:
     uv run streamlit run dashboard/app.py
 """
 
@@ -32,7 +32,7 @@ DEVICE = "cpu"
 SAMPLE_DIR = _ROOT / "data" / "samples"
 
 st.set_page_config(
-    page_title="Document Authentication",
+    page_title="Autenticación de Documentos",
     page_icon=":mag:",
     layout="wide",
 )
@@ -45,7 +45,7 @@ st.set_page_config(
 
 def _init_state() -> None:
     defaults = {
-        "history": [],  # list[dict] — one per analyzed image
+        "history": [],
         "predictor": None,
         "model_loaded": False,
     }
@@ -62,7 +62,7 @@ _init_state()
 # ---------------------------------------------------------------------------
 
 
-@st.cache_resource(show_spinner="Loading model…")
+@st.cache_resource(show_spinner="Cargando modelo…")
 def load_predictor() -> DocumentPredictor | None:
     if not CHECKPOINT.exists():
         return None
@@ -85,11 +85,7 @@ def b64_to_pil(b64_str: str) -> Image.Image:
 
 
 def load_uploaded_image(uploaded_file) -> tuple[list[Image.Image], str]:
-    """Convert any supported upload to a list of RGB PIL images.
-
-    Returns (pages, format_label) where pages has one entry for images/TIFF
-    and one entry per page for PDFs.
-    """
+    """Convierte cualquier archivo subido en una lista de imágenes RGB."""
     name = uploaded_file.name.lower()
     raw = uploaded_file.read()
 
@@ -111,27 +107,30 @@ def load_uploaded_image(uploaded_file) -> tuple[list[Image.Image], str]:
                 img.seek(img.tell() + 1)
         except EOFError:
             pass
-        label = f"TIFF ({len(pages)} página{'s' if len(pages) > 1 else ''})"
-        return pages, label
+        return pages, f"TIFF ({len(pages)} página{'s' if len(pages) > 1 else ''})"
 
-    # JPEG / PNG
     img = Image.open(BytesIO(raw)).convert("RGB")
     return [img], name.split(".")[-1].upper()
 
 
-def _label_color(label: str) -> str:
+def _etiqueta_color(label: str) -> str:
     return "🟢" if label == "authentic" else "🔴"
+
+
+def _etiqueta_es(label: str) -> str:
+    return "Auténtico" if label == "authentic" else "Falsificado"
 
 
 def _render_result_card(result: dict, image: Image.Image) -> None:
     label = result["label"]
     prob = result["probability"]
     color = "#2ecc71" if label == "authentic" else "#e74c3c"
+    etiqueta = _etiqueta_es(label)
 
     col1, col2 = st.columns([1, 1])
 
     with col1:
-        st.image(image, caption="Input image", use_container_width=True)
+        st.image(image, caption="Imagen analizada", use_container_width=True)
 
     with col2:
         st.markdown(
@@ -139,39 +138,39 @@ def _render_result_card(result: dict, image: Image.Image) -> None:
             <div style="border-left: 4px solid {color}; padding: 12px 16px;
                         background: #f8f9fa; border-radius: 4px;">
                 <h3 style="color:{color}; margin:0;">
-                    {_label_color(label)} {label.capitalize()}
+                    {_etiqueta_color(label)} {etiqueta}
                 </h3>
                 <p style="font-size: 1.1rem; margin: 8px 0 0 0;">
-                    P(forged) = <strong>{prob:.4f}</strong>
+                    P(falsificado) = <strong>{prob:.4f}</strong>
                 </p>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-        st.metric("Confidence", f"{prob:.1%}", delta=None)
+        st.metric("Confianza", f"{prob:.1%}")
         st.caption(
-            f"Threshold: {result['threshold']:.2f}  |  Latency: {result['inference_ms']:.1f} ms"
+            f"Umbral: {result['threshold']:.2f}  |  Latencia: {result['inference_ms']:.1f} ms"
         )
 
         if result.get("gradcam_b64"):
             st.image(
                 b64_to_pil(result["gradcam_b64"]),
-                caption="Grad-CAM overlay",
+                caption="Mapa de activación Grad-CAM",
                 use_container_width=True,
             )
             if result.get("most_activated_region"):
                 r = result["most_activated_region"]
                 st.caption(
-                    f"Most activated region — center: ({r['cx']:.0f}, {r['cy']:.0f})  "
-                    f"mean activation: {r['mean_activation']:.3f}"
+                    f"Región más activa — centro: ({r['cx']:.0f}, {r['cy']:.0f})  "
+                    f"activación media: {r['mean_activation']:.3f}"
                 )
 
 
 def _render_stats() -> None:
     history = st.session_state.history
     if not history:
-        st.info("No documents analyzed yet.")
+        st.info("No hay documentos analizados en esta sesión.")
         return
 
     n_total = len(history)
@@ -181,20 +180,19 @@ def _render_stats() -> None:
     avg_ms = float(np.mean([h["inference_ms"] for h in history]))
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Total analyzed", n_total)
-    c2.metric("Authentic", n_auth)
-    c3.metric("Forged", n_forged)
-    c4.metric("Avg P(forged)", f"{avg_prob:.3f}")
+    c1.metric("Total analizados", n_total)
+    c2.metric("Auténticos", n_auth)
+    c3.metric("Falsificados", n_forged)
+    c4.metric("P(falsificado) media", f"{avg_prob:.3f}")
 
-    st.caption(f"Avg latency: {avg_ms:.1f} ms/image")
+    st.caption(f"Latencia media: {avg_ms:.1f} ms/imagen")
 
-    # History table
     rows = [
         {
-            "Image": f"#{i + 1}",
-            "Label": h["label"],
-            "P(forged)": f"{h['probability']:.4f}",
-            "Latency (ms)": f"{h['inference_ms']:.1f}",
+            "Imagen": f"#{i + 1}",
+            "Resultado": _etiqueta_es(h["label"]),
+            "P(falsificado)": f"{h['probability']:.4f}",
+            "Latencia (ms)": f"{h['inference_ms']:.1f}",
         }
         for i, h in enumerate(reversed(history))
     ]
@@ -205,53 +203,55 @@ def _render_stats() -> None:
 # Sidebar
 # ---------------------------------------------------------------------------
 
-st.sidebar.title("Document Authentication")
+st.sidebar.title("Autenticación de Documentos")
 st.sidebar.caption("EfficientNet-B0 + Grad-CAM")
 st.sidebar.divider()
 
 predictor = load_predictor()
 if predictor is None:
-    st.sidebar.error(f"Checkpoint not found:\n`{CHECKPOINT}`")
+    st.sidebar.error(f"Checkpoint no encontrado:\n`{CHECKPOINT}`")
 else:
-    st.sidebar.success("Model loaded")
+    st.sidebar.success("Modelo cargado")
     info = predictor.model_info()
     st.sidebar.caption(
-        f"Architecture: {info['architecture']}  \n"
-        f"Params: {info['total_params']:,}  \n"
-        f"Device: {info['device'].upper()}"
+        f"Arquitectura: {info['architecture']}  \n"
+        f"Parámetros: {info['total_params']:,}  \n"
+        f"Dispositivo: {info['device'].upper()}"
     )
 
 st.sidebar.divider()
 threshold = st.sidebar.slider(
-    "Decision threshold",
+    "Umbral de decisión",
     min_value=0.1,
     max_value=0.9,
     value=0.5,
     step=0.05,
-    help="P(forged) ≥ threshold → classified as forged",
+    help="P(falsificado) ≥ umbral → clasificado como falsificado",
 )
-show_gradcam = st.sidebar.toggle("Show Grad-CAM overlay", value=True)
+show_gradcam = st.sidebar.toggle("Mostrar mapa Grad-CAM", value=True)
 gradcam_method = st.sidebar.selectbox(
-    "Grad-CAM method",
+    "Método Grad-CAM",
     options=["gradcam++", "gradcam", "eigencam", "ensemble"],
     disabled=not show_gradcam,
 )
 
 st.sidebar.divider()
-if st.sidebar.button("Clear history", use_container_width=True):
+if st.sidebar.button("Limpiar historial", use_container_width=True):
     st.session_state.history = []
     st.rerun()
 
 # ---------------------------------------------------------------------------
-# Main tabs
+# Pestañas principales
 # ---------------------------------------------------------------------------
 
-tab_verify, tab_demo, tab_stats = st.tabs(["Document Verifier", "Demo Mode", "Session Stats"])
+tab_verify, tab_demo, tab_stats = st.tabs(
+    ["Verificador de Documentos", "Modo Demo", "Estadísticas de Sesión"]
+)
 
-# ------- Tab 1: Document Verifier -------
+# ------- Pestaña 1: Verificador -------
 
 with tab_verify:
-    st.header("Upload a document image")
+    st.header("Sube un documento para verificar")
 
     uploaded = st.file_uploader(
         "JPEG, PNG, TIFF o PDF — cualquier resolución",
@@ -261,7 +261,7 @@ with tab_verify:
 
     if uploaded is not None:
         if predictor is None:
-            st.error("Model not loaded — cannot run inference.")
+            st.error("Modelo no cargado — no se puede ejecutar la inferencia.")
         else:
             pages, fmt_label = load_uploaded_image(uploaded)
             st.caption(f"Formato detectado: **{fmt_label}** · {len(pages)} imagen(es) a analizar")
@@ -273,7 +273,7 @@ with tab_verify:
                 pages_to_run = pages
 
             for image in pages_to_run:
-                with st.spinner("Running inference…"):
+                with st.spinner("Ejecutando inferencia…"):
                     b64 = pil_to_b64(image)
                     result = predictor.predict(
                         image_b64=b64,
@@ -284,27 +284,29 @@ with tab_verify:
                 st.session_state.history.append(result)
                 _render_result_card(result, image)
 
-# ------- Tab 2: Demo Mode -------
+# ------- Pestaña 2: Demo -------
 
 with tab_demo:
-    st.header("Demo — synthetic samples")
-    st.caption("Run inference on the pre-generated synthetic samples in `data/samples/`.")
+    st.header("Demo — muestras sintéticas")
+    st.caption(
+        "Ejecuta inferencia sobre las muestras generadas en `data/samples/`. "
+        "Incluye documentos auténticos y con 4 tipos de falsificación sintética."
+    )
 
     sample_images = sorted(SAMPLE_DIR.glob("*.jpg")) + sorted(SAMPLE_DIR.glob("*.png"))
 
     if not sample_images:
-        st.warning(f"No sample images found in `{SAMPLE_DIR}`.")
+        st.warning(f"No se encontraron imágenes en `{SAMPLE_DIR}`.")
     elif predictor is None:
-        st.error("Model not loaded — cannot run demo.")
+        st.error("Modelo no cargado — no se puede ejecutar el demo.")
     else:
-        cols_per_row = 3
         selected = st.multiselect(
-            "Select samples to analyze",
+            "Selecciona las muestras a analizar",
             options=[p.name for p in sample_images],
             default=[p.name for p in sample_images[: min(3, len(sample_images))]],
         )
 
-        if st.button("Run demo", type="primary", use_container_width=True):
+        if st.button("Ejecutar demo", type="primary", use_container_width=True):
             paths = [SAMPLE_DIR / name for name in selected]
             progress = st.progress(0)
 
@@ -322,16 +324,16 @@ with tab_demo:
                 progress.progress((i + 1) / len(paths))
 
                 with st.expander(
-                    f"{_label_color(result['label'])} {path.name} — "
-                    f"P(forged)={result['probability']:.4f}",
+                    f"{_etiqueta_color(result['label'])} {path.name} — "
+                    f"P(falsificado)={result['probability']:.4f}",
                     expanded=True,
                 ):
                     _render_result_card(result, image)
 
             progress.empty()
 
-# ------- Tab 3: Session Stats -------
+# ------- Pestaña 3: Estadísticas -------
 
 with tab_stats:
-    st.header("Session statistics")
+    st.header("Estadísticas de sesión")
     _render_stats()
