@@ -10,14 +10,27 @@ End-to-end document authentication system using **EfficientNet-B0 + Grad-CAM**.
 Detects forged fiscal stamps and identity documents with visual heatmap explanation.  
 Portfolio project targeting SICPA-style fiscal stamp authentication for tobacco/tax compliance.
 
+A full MLOps pipeline: synthetic data generation → preprocessing → two-phase
+fine-tuning → explainability → REST API + dashboard → PDF reports → model
+comparison → robustness/quality gating → MLflow Model Registry.
+
+> See [docs/ESTUDIO_DEL_PROYECTO.md](docs/ESTUDIO_DEL_PROYECTO.md) for the full
+> decision-making study (why this stack, key engineering insights, results).
+
 ---
 
 ## Architecture
 
 ```
                      ┌──────────────────────────────────────────────────┐
-Raw image (any res)  │  DocumentPreprocessor                            │
-        ──────────► │  perspective correction → denoise → CLAHE        │
+Raw image (any res)  │  ImageQualityAssessor (optional gate)            │
+        ──────────► │  sharpness · exposure · resolution · contrast    │
+                     │  fail → label='rejected' (skip inference)        │
+                     └───────────────────┬──────────────────────────────┘
+                                         │  pass
+                     ┌───────────────────▼──────────────────────────────┐
+                     │  DocumentPreprocessor                            │
+                     │  perspective correction → denoise → CLAHE        │
                      │  → bicubic resize (224×224) → ImageNet normalize │
                      └───────────────────┬──────────────────────────────┘
                                          │  float32 tensor (3, 224, 224)
@@ -33,24 +46,43 @@ Raw image (any res)  │  DocumentPreprocessor                            │
                      │  Decision       │  │  Grad-CAM++ heatmap         │
                      │  threshold=0.50 │  │  overlay on original image  │
                      │  → authentic    │  │  + most-activated region    │
-                     │  → forged       │  └─────────────────────────────┘
-                     └─────────────────┘
+                     │  → forged       │  └──────────────┬──────────────┘
+                     └────────┬────────┘                 │
+                              └────────────┬─────────────┘
+                                  ┌─────────▼──────────┐
+                                  │  PDF report (A4)   │
+                                  └────────────────────┘
 ```
 
-## Results (synthetic dataset — 20 samples)
+Model loading is pluggable: the API serves from a local checkpoint by default, or
+from the **MLflow Model Registry** by deployment alias (`production`/`staging`)
+when `MODEL_REGISTRY_ALIAS` is set, with automatic fallback if the registry is
+unreachable.
 
-> **Note:** trained on 20 synthetic samples for pipeline validation only.  
-> With MIDV-500 (~15,000 frames) these metrics will be representative.
+## Project status & results
 
-| Split | Accuracy | Precision | Recall | F1-score | AUC-ROC | AUC-PR |
-|-------|----------|-----------|--------|----------|---------|--------|
-| Train | 1.0000   | 1.0000    | 1.0000 | 1.0000   | 1.0000  | 1.0000 |
-| Val   | 1.0000   | 1.0000    | 1.0000 | 1.0000   | 1.0000  | 1.0000 |
-| Test  | 1.0000   | 1.0000    | 1.0000 | 1.0000   | 1.0000  | 1.0000 |
+> **The pipeline is complete and fully tested; the shipped checkpoint is not yet
+> trained on real data.** It produces near-random probabilities (~0.5), so the
+> authentic/forged verdict is not yet reliable — this is deliberate. The value
+> demonstrated here is the **end-to-end MLOps architecture**, which is independent
+> of model accuracy. Training on MIDV-500 is the final step, not a redesign
+> (see [study §7](docs/ESTUDIO_DEL_PROYECTO.md)).
 
-**EfficientNet-B0:** 5.3M parameters total · Latency p95 < 200 ms on CPU (batch=1)
+**Engineering quality (verified):**
 
-The model detects all 4 synthetic forgery types: `text_blur`, `color_shift`, `splicing`, `hologram_noise`.
+| Metric | Value |
+|--------|-------|
+| Test suite | 270 tests, 87% coverage |
+| Type checking | 24/24 modules pass mypy |
+| CI | lint + type-check + tests + docker-build, all green |
+| Inference latency (CPU, batch=1) | ~330 ms/image |
+| Checkpoint size | 17.6 MB (EfficientNet-B0, 5.3M params) |
+
+The synthetic forgery generator covers 4 types — `text_blur`, `color_shift`,
+`splicing`, `hologram_noise` — at 3 severity levels. The robustness analysis
+(notebook 07) characterizes model/quality-gate behavior under 5 capture
+degradations. Backbone comparison (notebook 06) benchmarks EfficientNet-B0 vs
+ResNet-18 vs MobileNetV3-Small on accuracy, latency and size.
 
 ## Quick Start
 
@@ -71,11 +103,11 @@ make run-dashboard    # → http://localhost:8501
 ### Authenticate a document via API
 
 ```bash
-# Encode an image and call the endpoint
+# Encode an image and call the endpoint (with quality gating enabled)
 IMAGE_B64=$(base64 -i path/to/document.jpg)
 curl -s -X POST http://localhost:8000/authenticate \
   -H "Content-Type: application/json" \
-  -d "{\"image_b64\": \"$IMAGE_B64\", \"return_gradcam\": true}" \
+  -d "{\"image_b64\": \"$IMAGE_B64\", \"return_gradcam\": true, \"check_quality\": true}" \
   | python -m json.tool
 ```
 
@@ -88,16 +120,37 @@ Response:
   "gradcam_b64": "<base64 PNG>",
   "most_activated_region": {"x0": 42, "y0": 18, "x1": 183, "y1": 156,
                              "cx": 112, "cy": 87, "mean_activation": 0.821},
-  "inference_ms": 87.3
+  "inference_ms": 87.3,
+  "quality": {"passed": true, "sharpness": 412.5, "brightness": 138.0,
+              "resolution": [768, 1024], "reasons": []}
 }
 ```
 
-### Batch endpoint
+When `check_quality` is enabled and the image fails the gate (too blurry, dark,
+or low-resolution), `label` becomes `"rejected"`, Grad-CAM is skipped, and
+`quality.reasons` lists why.
+
+### Endpoints
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/authenticate` | Classify one image (+ optional Grad-CAM, quality gate) |
+| `POST` | `/authenticate/batch` | Classify up to 32 images in one call |
+| `POST` | `/report` | Classify and return a one-page PDF report (`application/pdf`) |
+| `GET`  | `/health` | Liveness + model readiness |
+| `GET`  | `/model/info` | Architecture, param counts, checkpoint metadata |
 
 ```bash
+# Batch
 curl -s -X POST http://localhost:8000/authenticate/batch \
   -H "Content-Type: application/json" \
   -d '{"images": [{"image_b64": "..."},  {"image_b64": "..."}]}'
+
+# PDF report (saved to disk)
+curl -s -X POST http://localhost:8000/report \
+  -H "Content-Type: application/json" \
+  -d "{\"image_b64\": \"$IMAGE_B64\", \"return_gradcam\": true}" \
+  -o report.pdf
 ```
 
 ## Dataset
@@ -119,19 +172,23 @@ make samples
 
 ## Tech Stack
 
-| Component           | Technology                            |
-|---------------------|---------------------------------------|
-| Model               | EfficientNet-B0 (torchvision)         |
-| Explainability      | Grad-CAM++ / EigenCAM (grad-cam)      |
-| Augmentation        | Albumentations 2.x                    |
-| Experiment tracking | MLflow 3.x (SQLite backend)           |
-| API                 | FastAPI + Uvicorn                     |
-| Dashboard           | Streamlit                             |
-| Containerization    | Docker multi-stage (api + dashboard)  |
-| CI                  | GitHub Actions + uv                   |
-| Linting             | Ruff + mypy                           |
-| Testing             | pytest + pytest-cov                   |
-| Python              | 3.11                                  |
+| Component           | Technology                                   |
+|---------------------|----------------------------------------------|
+| Model               | EfficientNet-B0 (torchvision)                |
+| Backbone comparison | ResNet-18, MobileNetV3-Small (ablation)      |
+| Explainability      | Grad-CAM++ / EigenCAM (grad-cam)             |
+| Augmentation        | Albumentations 2.x                           |
+| Quality gating      | OpenCV no-reference metrics                  |
+| Reports             | reportlab (one-page A4 PDF)                  |
+| Experiment tracking | MLflow 3.x (SQLite backend)                  |
+| Model registry      | MLflow registry (aliases: staging/production)|
+| API                 | FastAPI + Uvicorn                            |
+| Dashboard           | Streamlit                                    |
+| Containerization    | Docker multi-stage (api + dashboard)         |
+| CI                  | GitHub Actions + uv (CPU-only torch on Linux)|
+| Linting             | Ruff + mypy                                  |
+| Testing             | pytest + pytest-cov (270 tests, 87%)         |
+| Python              | 3.11                                         |
 
 ## Project Structure
 
@@ -139,30 +196,38 @@ make samples
 document_authentication/
 ├── src/
 │   ├── data/
-│   │   ├── augmentation.py     # SyntheticForgeryGenerator (4 types)
+│   │   ├── augmentation.py     # SyntheticForgeryGenerator (4 types × 3 severities)
 │   │   └── loader.py           # DocumentDataset, create_dataloaders
 │   ├── preprocessing/
-│   │   └── pipeline.py         # DocumentPreprocessor (perspective+CLAHE+denoise)
+│   │   ├── pipeline.py         # DocumentPreprocessor (perspective+CLAHE+denoise)
+│   │   ├── quality.py          # ImageQualityAssessor (no-reference quality gate)
+│   │   └── degradations.py     # 5 controlled degradations for robustness testing
 │   ├── models/
 │   │   ├── classifier.py       # DocumentClassifier (EfficientNet-B0 head)
+│   │   ├── architectures.py    # DocumentClassifierV2 (multi-backbone factory)
 │   │   ├── trainer.py          # Trainer with two-phase fine-tuning + MLflow
-│   │   └── evaluator.py        # ModelEvaluator (ROC/PR/F1/threshold search)
-│   └── explainability/
-│       ├── gradcam.py          # GradCAMExplainer (gradcam / gradcam++ / eigencam)
-│       └── visualizer.py       # overlay_heatmap, most_activated_region
+│   │   ├── evaluator.py        # ModelEvaluator (ROC/PR/F1/threshold search)
+│   │   ├── comparator.py       # ModelComparator (ablation study + MLflow)
+│   │   └── registry.py         # ModelRegistry (versioning + staging/production)
+│   ├── explainability/
+│   │   ├── gradcam.py          # GradCAMExplainer (gradcam / gradcam++ / eigencam)
+│   │   └── visualizer.py       # overlay_heatmap, most_activated_region
+│   └── reporting/
+│       └── pdf_report.py       # PDFReportGenerator (one-page A4 report)
 ├── api/
-│   ├── main.py                 # FastAPI app (4 endpoints)
-│   ├── predictor.py            # DocumentPredictor (inference + Grad-CAM)
+│   ├── main.py                 # FastAPI app (5 endpoints, registry-aware loading)
+│   ├── predictor.py            # DocumentPredictor (inference + Grad-CAM + quality)
 │   └── schemas.py              # Pydantic request/response models
 ├── dashboard/
-│   └── app.py                  # Streamlit UI (verifier + demo + stats)
+│   └── app.py                  # Streamlit UI (verifier + demo + stats, español)
 ├── notebooks/
-│   ├── 01_eda_dataset.ipynb
-│   ├── 02_preprocessing_pipeline.ipynb
-│   ├── 03_model_training.ipynb
-│   ├── 04_gradcam_analysis.ipynb
-│   └── 05_evaluation.ipynb
-├── tests/                      # pytest suite (~120 tests)
+│   ├── 01_eda_dataset.ipynb            05_evaluation.ipynb
+│   ├── 02_preprocessing_pipeline.ipynb 06_model_comparison.ipynb
+│   ├── 03_model_training.ipynb         07_robustness_analysis.ipynb
+│   └── 04_gradcam_analysis.ipynb       08_model_registry.ipynb
+├── tests/                      # pytest suite (270 tests, 87% coverage)
+├── docs/
+│   └── ESTUDIO_DEL_PROYECTO.md # decision-making & engineering study
 ├── scripts/
 │   ├── download_dataset.py
 │   └── generate_samples.py
@@ -198,6 +263,34 @@ docker run -p 8000:8000 doc-auth-api
 docker build --target dashboard -t doc-auth-dashboard .
 docker run -p 8501:8501 doc-auth-dashboard
 ```
+
+## Model Registry
+
+Register a checkpoint, promote it through deployment stages, and serve it by alias:
+
+```python
+from src.models.registry import ModelRegistry
+
+registry = ModelRegistry(model_name="document-authenticator")
+version = registry.register(
+    "models/saved/efficientnet_b0_best.pt",
+    metrics={"val_f1": 0.94, "val_auc": 0.97},
+    description="EfficientNet-B0, two-phase fine-tune",
+)
+registry.promote(version, alias="staging")      # validate
+registry.promote(version, alias="production")    # deploy
+```
+
+Serve the production model from the API via environment variables (falls back to
+the local checkpoint if the registry is unreachable):
+
+```bash
+export MLFLOW_TRACKING_URI=sqlite:///mlflow.db
+export MODEL_REGISTRY_ALIAS=production
+uvicorn api.main:app
+```
+
+Rollback is atomic: `registry.promote(previous_version, "production")`.
 
 ---
 
