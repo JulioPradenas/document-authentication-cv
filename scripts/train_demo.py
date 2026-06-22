@@ -24,11 +24,17 @@ from src.models.trainer import Trainer, TrainerConfig
 
 
 def main() -> None:
+    import argparse
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--data-dir", type=Path, default=Path("data/train"))
+    args = ap.parse_args()
+
     device = "mps" if torch.backends.mps.is_available() else "cpu"
-    print(f"Device: {device}")
+    print(f"Device: {device}  |  data: {args.data_dir}")
 
     train_loader, val_loader, test_loader = create_dataloaders(
-        data_dir=Path("data/train"),
+        data_dir=args.data_dir,
         batch_size=32,
         num_workers=0,  # DocumentPreprocessor holds an unpicklable cv2.CLAHE
     )
