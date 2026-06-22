@@ -241,3 +241,39 @@ class TestTrainer:
         assert 0.0 <= metrics["auc"] <= 1.0
         assert 0.0 <= metrics["accuracy"] <= 1.0
         assert metrics["loss"] >= 0.0
+
+    def test_compute_loss_matches_plain_bce_without_pos_weight(self):
+        import torch.nn.functional as F
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            trainer = self._make_trainer(Path(tmpdir))
+        preds = torch.tensor([0.2, 0.8, 0.4, 0.6])
+        labels = torch.tensor([0.0, 1.0, 0.0, 1.0])
+        assert trainer.cfg.pos_weight is None
+        expected = F.binary_cross_entropy(preds, labels)
+        assert torch.allclose(trainer._compute_loss(preds, labels), expected)
+
+    def test_pos_weight_upweights_positive_class(self):
+        """pos_weight>1 must increase the loss contribution of positive samples."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            model = make_model()
+            loader = make_tiny_loader(n=8, batch_size=4)
+            cfg = TrainerConfig(
+                checkpoint_dir=Path(tmpdir),
+                mlflow_tracking_uri=f"sqlite:///{tmpdir}/mlflow.db",
+                device="cpu",
+                pos_weight=3.0,
+            )
+            trainer = Trainer(model, loader, loader, cfg)
+
+        preds = torch.tensor([0.2, 0.8, 0.4, 0.6])
+        labels = torch.tensor([0.0, 1.0, 0.0, 1.0])
+        weighted = trainer._compute_loss(preds, labels)
+
+        # Reference: same BCE but with positive samples weighted by pos_weight
+        import torch.nn.functional as F
+
+        manual = F.binary_cross_entropy(preds, labels, weight=torch.tensor([1.0, 3.0, 1.0, 3.0]))
+        assert torch.allclose(weighted, manual)
+        # And it must differ from the unweighted loss
+        assert not torch.allclose(weighted, F.binary_cross_entropy(preds, labels))

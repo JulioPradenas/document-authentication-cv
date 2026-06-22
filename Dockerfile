@@ -13,8 +13,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends build-essential
 COPY pyproject.toml uv.lock* ./
 RUN uv sync --frozen --no-dev --no-install-project
 
-# ── Stage 2: API runtime ───────────────────────────────────────────────────
-FROM python:3.11-slim AS api
+# ── Stage 2: shared runtime base ───────────────────────────────────────────
+# OpenCV (cv2) needs a handful of system shared libs (libGL, glib, libxcb…)
+# that python:3.11-slim does not ship. Install them once here so both the API
+# and dashboard runtimes inherit them. Without this, `import cv2` fails at
+# runtime with: libxcb.so.1: cannot open shared object file.
+FROM python:3.11-slim AS runtime-base
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 libxcb1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Stage 3: API runtime ───────────────────────────────────────────────────
+FROM runtime-base AS api
 
 WORKDIR /app
 
@@ -43,8 +54,8 @@ HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
 
 CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
 
-# ── Stage 3: Dashboard runtime ─────────────────────────────────────────────
-FROM python:3.11-slim AS dashboard
+# ── Stage 4: Dashboard runtime ─────────────────────────────────────────────
+FROM runtime-base AS dashboard
 
 WORKDIR /app
 
