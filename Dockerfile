@@ -80,6 +80,11 @@ EXPOSE 8501
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health')"
 
+# XSRF/CORS protection is disabled because the Space runs behind Hugging Face's
+# reverse proxy, where Streamlit's XSRF token cookie is not propagated — file
+# uploads otherwise fail with "AxiosError: Request failed with status code 403".
 CMD ["streamlit", "run", "dashboard/app.py", \
      "--server.port=8501", "--server.address=0.0.0.0", \
-     "--server.headless=true"]
+     "--server.headless=true", \
+     "--server.enableXsrfProtection=false", \
+     "--server.enableCORS=false"]
