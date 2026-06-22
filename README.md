@@ -5,119 +5,140 @@
 ![PyTorch](https://img.shields.io/badge/PyTorch-2.3-ee4c2c.svg)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
+[![Demo en vivo](https://img.shields.io/badge/🤗%20Demo-en%20vivo-yellow.svg)](https://huggingface.co/spaces/Pradnas/document-authentication-dashboard)
 
-End-to-end document authentication system using **EfficientNet-B0 + Grad-CAM**.  
-Detects forged fiscal stamps and identity documents with visual heatmap explanation.  
-Portfolio project targeting SICPA-style fiscal stamp authentication for tobacco/tax compliance.
+Sistema end-to-end de autenticación de documentos con **EfficientNet-B0 + Grad-CAM**.
+Detecta timbres fiscales y documentos de identidad falsificados, con explicación
+visual mediante mapa de calor.
+Proyecto de portafolio orientado a la autenticación de timbres fiscales tipo SICPA
+(cumplimiento tributario para tabaco/impuestos).
 
-A full MLOps pipeline: synthetic data generation → preprocessing → two-phase
-fine-tuning → explainability → REST API + dashboard → PDF reports → model
-comparison → robustness/quality gating → MLflow Model Registry.
+Un pipeline de MLOps completo: generación de datos sintéticos → preprocesamiento →
+fine-tuning en dos fases → explicabilidad → API REST + dashboard → informes PDF →
+comparación de modelos → robustez/quality gating → MLflow Model Registry.
 
-> See [docs/ESTUDIO_DEL_PROYECTO.md](docs/ESTUDIO_DEL_PROYECTO.md) for the full
-> decision-making study (why this stack, key engineering insights, results).
+> **Demo en vivo:** https://huggingface.co/spaces/Pradnas/document-authentication-dashboard
+>
+> Consulta [docs/ESTUDIO_DEL_PROYECTO.md](docs/ESTUDIO_DEL_PROYECTO.md) para el
+> estudio completo de toma de decisiones (por qué este stack, insights de
+> ingeniería, resultados).
 
 ---
 
-## Architecture
+## Arquitectura
 
 ```
                      ┌──────────────────────────────────────────────────┐
-Raw image (any res)  │  ImageQualityAssessor (optional gate)            │
-        ──────────► │  sharpness · exposure · resolution · contrast    │
-                     │  fail → label='rejected' (skip inference)        │
+Imagen (cualquier    │  ImageQualityAssessor (gate opcional)            │
+ resolución)         │  nitidez · exposición · resolución · contraste   │
+        ──────────► │  falla → label='rejected' (omite inferencia)     │
                      └───────────────────┬──────────────────────────────┘
-                                         │  pass
+                                         │  pasa
                      ┌───────────────────▼──────────────────────────────┐
                      │  DocumentPreprocessor                            │
-                     │  perspective correction → denoise → CLAHE        │
-                     │  → bicubic resize (224×224) → ImageNet normalize │
+                     │  corrección perspectiva → denoise → CLAHE        │
+                     │  → resize bicúbico (224×224) → normalize ImageNet│
                      └───────────────────┬──────────────────────────────┘
-                                         │  float32 tensor (3, 224, 224)
+                                         │  tensor float32 (3, 224, 224)
                      ┌───────────────────▼──────────────────────────────┐
-                     │  EfficientNet-B0 (fine-tuned, two-phase)         │
-                     │  Phase A: freeze backbone, train head  (5 ep)    │
-                     │  Phase B: unfreeze last 2 blocks, LR 1e-4 (15 ep)│
-                     │  Head: Dropout → Linear(1280,256) → ReLU        │
-                     │        → Dropout → Linear(256,1) → Sigmoid      │
+                     │  EfficientNet-B0 (fine-tuned, dos fases)         │
+                     │  Fase A: congela backbone, entrena cabeza (5 ep) │
+                     │  Fase B: descongela últimos 2 bloques, LR 1e-4   │
+                     │  Cabeza: Dropout → Linear(1280,256) → ReLU       │
+                     │          → Dropout → Linear(256,1) → Sigmoid     │
                      └──────────┬────────────────────┬──────────────────┘
-                                │ P(forged) ∈ [0,1]  │ backward pass
+                                │ P(falsif.) ∈ [0,1] │ backward pass
                      ┌──────────▼──────┐  ┌──────────▼──────────────────┐
-                     │  Decision       │  │  Grad-CAM++ heatmap         │
-                     │  threshold=0.50 │  │  overlay on original image  │
-                     │  → authentic    │  │  + most-activated region    │
-                     │  → forged       │  └──────────────┬──────────────┘
+                     │  Decisión       │  │  Mapa Grad-CAM++            │
+                     │  umbral=0.50    │  │  superpuesto a la imagen    │
+                     │  → auténtico    │  │  + región más activada      │
+                     │  → falsificado  │  └──────────────┬──────────────┘
                      └────────┬────────┘                 │
                               └────────────┬─────────────┘
                                   ┌─────────▼──────────┐
-                                  │  PDF report (A4)   │
+                                  │  Informe PDF (A4)  │
                                   └────────────────────┘
 ```
 
-Model loading is pluggable: the API serves from a local checkpoint by default, or
-from the **MLflow Model Registry** by deployment alias (`production`/`staging`)
-when `MODEL_REGISTRY_ALIAS` is set, with automatic fallback if the registry is
-unreachable.
+La carga del modelo es flexible: la API sirve desde un checkpoint local por
+defecto, o desde el **MLflow Model Registry** por alias de despliegue
+(`production`/`staging`) cuando `MODEL_REGISTRY_ALIAS` está definido, con fallback
+automático si el registry no está disponible.
 
-## Project status & results
+## Estado del proyecto y resultados
 
-> **The pipeline is complete and fully tested; the shipped checkpoint is not yet
-> trained on real data.** It produces near-random probabilities (~0.5), so the
-> authentic/forged verdict is not yet reliable — this is deliberate. The value
-> demonstrated here is the **end-to-end MLOps architecture**, which is independent
-> of model accuracy. Training on MIDV-500 is the final step, not a redesign
-> (see [study §7](docs/ESTUDIO_DEL_PROYECTO.md)).
+> **El pipeline está completo y totalmente testeado.** El repositorio **no incluye
+> un checkpoint entrenado** (los `*.pt` están en `.gitignore`). El [demo en
+> vivo](https://huggingface.co/spaces/Pradnas/document-authentication-dashboard)
+> corre un checkpoint entrenado sobre un **dataset sintético pequeño** (ver
+> [`scripts/build_training_data.py`](scripts/build_training_data.py)): produce
+> verdictos reales y separables, pero es una **tarea de juguete** con
+> perturbaciones visibles, no forense documental real. Entrenar con MIDV-500 es el
+> paso final, no un rediseño (ver [estudio §7](docs/ESTUDIO_DEL_PROYECTO.md)). El
+> valor demostrado aquí es la **arquitectura MLOps end-to-end**, independiente de
+> la precisión del modelo.
 
-**Engineering quality (verified):**
+**Calidad de ingeniería (verificada):**
 
-| Metric | Value |
+| Métrica | Valor |
 |--------|-------|
-| Test suite | 270 tests, 87% coverage |
-| Type checking | 24/24 modules pass mypy |
-| CI | lint + type-check + tests + docker-build, all green |
-| Inference latency (CPU, batch=1) | ~330 ms/image |
-| Checkpoint size | 17.6 MB (EfficientNet-B0, 5.3M params) |
+| Suite de tests | 272 tests, 87% de cobertura |
+| Type checking | 24/24 módulos pasan mypy |
+| CI | lint + type-check + tests + docker-build, todo en verde |
+| Latencia de inferencia (CPU, batch=1) | ~330 ms/imagen |
+| Tamaño del checkpoint | 17.6 MB (EfficientNet-B0, 5.3M params) |
 
-The synthetic forgery generator covers 4 types — `text_blur`, `color_shift`,
-`splicing`, `hologram_noise` — at 3 severity levels. The robustness analysis
-(notebook 07) characterizes model/quality-gate behavior under 5 capture
-degradations. Backbone comparison (notebook 06) benchmarks EfficientNet-B0 vs
-ResNet-18 vs MobileNetV3-Small on accuracy, latency and size.
+El generador de falsificaciones sintéticas cubre 4 tipos — `text_blur`,
+`color_shift`, `splicing`, `hologram_noise` — en 3 niveles de severidad. El
+análisis de robustez (notebook 07) caracteriza el comportamiento del modelo y del
+quality gate frente a 5 degradaciones de captura. La comparación de backbones
+(notebook 06) mide EfficientNet-B0 vs ResNet-18 vs MobileNetV3-Small en precisión,
+latencia y tamaño.
 
-## Quick Start
+## Inicio rápido
 
 ```bash
-# Install dependencies (requires uv ≥ 0.4)
+# Instalar dependencias (requiere uv ≥ 0.4)
 uv sync --all-extras
 
-# Generate 20 synthetic training samples
+# Generar 20 muestras sintéticas de prueba
 make samples
 
-# Start the REST API
+# Levantar la API REST
 make run-api          # → http://localhost:8000/docs
 
-# Start the Streamlit dashboard
+# Levantar el dashboard de Streamlit
 make run-dashboard    # → http://localhost:8501
 ```
 
-### Authenticate a document via API
+### Entrenar el checkpoint de demo (datos sintéticos, ruta T1)
 
 ```bash
-# Encode an image and call the endpoint (with quality gating enabled)
-IMAGE_B64=$(base64 -i path/to/document.jpg)
+# Genera un set balanceado con falsificaciones visibles (separables)
+uv run python scripts/build_training_data.py --n-per-class 200
+
+# Fine-tuning en dos fases → models/saved/efficientnet_b0_best.pt
+uv run python scripts/train_demo.py
+```
+
+### Autenticar un documento vía API
+
+```bash
+# Codifica una imagen y llama al endpoint (con quality gating activado)
+IMAGE_B64=$(base64 -i ruta/al/documento.jpg)
 curl -s -X POST http://localhost:8000/authenticate \
   -H "Content-Type: application/json" \
   -d "{\"image_b64\": \"$IMAGE_B64\", \"return_gradcam\": true, \"check_quality\": true}" \
   | python -m json.tool
 ```
 
-Response:
+Respuesta:
 ```json
 {
   "label": "forged",
   "probability": 0.9241,
   "threshold": 0.5,
-  "gradcam_b64": "<base64 PNG>",
+  "gradcam_b64": "<PNG en base64>",
   "most_activated_region": {"x0": 42, "y0": 18, "x1": 183, "y1": 156,
                              "cx": 112, "cy": 87, "mean_activation": 0.821},
   "inference_ms": 87.3,
@@ -126,19 +147,19 @@ Response:
 }
 ```
 
-When `check_quality` is enabled and the image fails the gate (too blurry, dark,
-or low-resolution), `label` becomes `"rejected"`, Grad-CAM is skipped, and
-`quality.reasons` lists why.
+Cuando `check_quality` está activado y la imagen no pasa el gate (muy borrosa,
+oscura o de baja resolución), `label` pasa a `"rejected"`, se omite Grad-CAM y
+`quality.reasons` lista los motivos.
 
 ### Endpoints
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| `POST` | `/authenticate` | Classify one image (+ optional Grad-CAM, quality gate) |
-| `POST` | `/authenticate/batch` | Classify up to 32 images in one call |
-| `POST` | `/report` | Classify and return a one-page PDF report (`application/pdf`) |
-| `GET`  | `/health` | Liveness + model readiness |
-| `GET`  | `/model/info` | Architecture, param counts, checkpoint metadata |
+| Método | Ruta | Propósito |
+|--------|------|-----------|
+| `POST` | `/authenticate` | Clasifica una imagen (+ Grad-CAM y quality gate opcionales) |
+| `POST` | `/authenticate/batch` | Clasifica hasta 32 imágenes en una llamada |
+| `POST` | `/report` | Clasifica y devuelve un informe PDF (`application/pdf`) |
+| `GET`  | `/health` | Liveness + disponibilidad del modelo |
+| `GET`  | `/model/info` | Arquitectura, conteo de parámetros, metadata del checkpoint |
 
 ```bash
 # Batch
@@ -146,127 +167,145 @@ curl -s -X POST http://localhost:8000/authenticate/batch \
   -H "Content-Type: application/json" \
   -d '{"images": [{"image_b64": "..."},  {"image_b64": "..."}]}'
 
-# PDF report (saved to disk)
+# Informe PDF (guardado a disco)
 curl -s -X POST http://localhost:8000/report \
   -H "Content-Type: application/json" \
   -d "{\"image_b64\": \"$IMAGE_B64\", \"return_gradcam\": true}" \
-  -o report.pdf
+  -o informe.pdf
 ```
 
 ## Dataset
 
-**MIDV-500** — 500 video clips covering 50 document types (passports, IDs, driver's licenses).
+**MIDV-500** — 500 clips de video que cubren 50 tipos de documento (pasaportes,
+cédulas, licencias de conducir).
 
-- ~15,000 usable frames after extraction
-- Authentic: original frames; Forged: synthetically perturbed (4 types)
-- Raw data is **not committed** — `data/raw/` is gitignored
+- ~15.000 frames utilizables tras la extracción
+- Auténticos: frames originales; Falsificados: perturbados sintéticamente (4 tipos)
+- Los datos crudos **no se commitean** — `data/raw/` está en `.gitignore`
 
 ```bash
-# Download MIDV-500 (requires datasets extra)
+# Descargar MIDV-500 (requiere el extra datasets)
 uv sync --extra datasets
 uv run python scripts/download_dataset.py
 
-# Generate synthetic test samples only (no download)
+# Generar solo muestras sintéticas de prueba (sin descarga)
 make samples
 ```
 
-## Tech Stack
+## Stack tecnológico
 
-| Component           | Technology                                   |
+| Componente          | Tecnología                                   |
 |---------------------|----------------------------------------------|
-| Model               | EfficientNet-B0 (torchvision)                |
-| Backbone comparison | ResNet-18, MobileNetV3-Small (ablation)      |
-| Explainability      | Grad-CAM++ / EigenCAM (grad-cam)             |
-| Augmentation        | Albumentations 2.x                           |
-| Quality gating      | OpenCV no-reference metrics                  |
-| Reports             | reportlab (one-page A4 PDF)                  |
-| Experiment tracking | MLflow 3.x (SQLite backend)                  |
+| Modelo              | EfficientNet-B0 (torchvision)                |
+| Comparación backbones | ResNet-18, MobileNetV3-Small (ablation)    |
+| Explicabilidad      | Grad-CAM++ / EigenCAM (grad-cam)             |
+| Aumentación         | Albumentations 2.x                           |
+| Quality gating      | Métricas sin referencia de OpenCV            |
+| Informes            | reportlab (PDF A4 de una página)             |
+| Tracking de experimentos | MLflow 3.x (backend SQLite)             |
 | Model registry      | MLflow registry (aliases: staging/production)|
 | API                 | FastAPI + Uvicorn                            |
 | Dashboard           | Streamlit                                    |
-| Containerization    | Docker multi-stage (api + dashboard)         |
-| CI                  | GitHub Actions + uv (CPU-only torch on Linux)|
+| Contenedorización   | Docker multi-stage (api + dashboard)         |
+| CI                  | GitHub Actions + uv (torch CPU-only en Linux)|
 | Linting             | Ruff + mypy                                  |
-| Testing             | pytest + pytest-cov (270 tests, 87%)         |
+| Testing             | pytest + pytest-cov (272 tests, 87%)         |
 | Python              | 3.11                                         |
 
-## Project Structure
+## Estructura del proyecto
 
 ```
 document_authentication/
 ├── src/
 │   ├── data/
-│   │   ├── augmentation.py     # SyntheticForgeryGenerator (4 types × 3 severities)
+│   │   ├── augmentation.py     # SyntheticForgeryGenerator (4 tipos × 3 severidades)
 │   │   └── loader.py           # DocumentDataset, create_dataloaders
 │   ├── preprocessing/
-│   │   ├── pipeline.py         # DocumentPreprocessor (perspective+CLAHE+denoise)
-│   │   ├── quality.py          # ImageQualityAssessor (no-reference quality gate)
-│   │   └── degradations.py     # 5 controlled degradations for robustness testing
+│   │   ├── pipeline.py         # DocumentPreprocessor (perspectiva+CLAHE+denoise)
+│   │   ├── quality.py          # ImageQualityAssessor (quality gate sin referencia)
+│   │   └── degradations.py     # 5 degradaciones controladas para robustez
 │   ├── models/
-│   │   ├── classifier.py       # DocumentClassifier (EfficientNet-B0 head)
-│   │   ├── architectures.py    # DocumentClassifierV2 (multi-backbone factory)
-│   │   ├── trainer.py          # Trainer with two-phase fine-tuning + MLflow
-│   │   ├── evaluator.py        # ModelEvaluator (ROC/PR/F1/threshold search)
-│   │   ├── comparator.py       # ModelComparator (ablation study + MLflow)
-│   │   └── registry.py         # ModelRegistry (versioning + staging/production)
+│   │   ├── classifier.py       # DocumentClassifier (cabeza EfficientNet-B0)
+│   │   ├── architectures.py    # DocumentClassifierV2 (factory multi-backbone)
+│   │   ├── trainer.py          # Trainer con fine-tuning en dos fases + MLflow
+│   │   ├── evaluator.py        # ModelEvaluator (ROC/PR/F1/búsqueda de umbral)
+│   │   ├── comparator.py       # ModelComparator (ablation + MLflow)
+│   │   └── registry.py         # ModelRegistry (versionado + staging/production)
 │   ├── explainability/
 │   │   ├── gradcam.py          # GradCAMExplainer (gradcam / gradcam++ / eigencam)
 │   │   └── visualizer.py       # overlay_heatmap, most_activated_region
 │   └── reporting/
-│       └── pdf_report.py       # PDFReportGenerator (one-page A4 report)
+│       └── pdf_report.py       # PDFReportGenerator (informe A4 de una página)
 ├── api/
-│   ├── main.py                 # FastAPI app (5 endpoints, registry-aware loading)
-│   ├── predictor.py            # DocumentPredictor (inference + Grad-CAM + quality)
-│   └── schemas.py              # Pydantic request/response models
+│   ├── main.py                 # App FastAPI (5 endpoints, carga registry-aware)
+│   ├── predictor.py            # DocumentPredictor (inferencia + Grad-CAM + calidad)
+│   └── schemas.py              # Modelos Pydantic de request/response
 ├── dashboard/
-│   └── app.py                  # Streamlit UI (verifier + demo + stats, español)
+│   └── app.py                  # UI Streamlit (verificador + demo + stats, español)
 ├── notebooks/
 │   ├── 01_eda_dataset.ipynb            05_evaluation.ipynb
 │   ├── 02_preprocessing_pipeline.ipynb 06_model_comparison.ipynb
 │   ├── 03_model_training.ipynb         07_robustness_analysis.ipynb
 │   └── 04_gradcam_analysis.ipynb       08_model_registry.ipynb
-├── tests/                      # pytest suite (270 tests, 87% coverage)
+├── tests/                      # suite pytest (272 tests, 87% de cobertura)
 ├── docs/
-│   └── ESTUDIO_DEL_PROYECTO.md # decision-making & engineering study
+│   └── ESTUDIO_DEL_PROYECTO.md # estudio de decisiones e ingeniería
+├── deploy/
+│   └── huggingface/            # README + guía de despliegue en HF Spaces
 ├── scripts/
 │   ├── download_dataset.py
-│   └── generate_samples.py
-├── models/saved/               # checkpoints (gitignored except .gitkeep)
-├── reports/figures/            # notebook output figures
+│   ├── generate_samples.py
+│   ├── build_training_data.py  # genera el dataset sintético de entrenamiento (T1)
+│   └── train_demo.py           # entrena el checkpoint de demo
+├── models/saved/               # checkpoints (gitignored salvo .gitkeep)
+├── reports/figures/            # figuras de salida de los notebooks
 ├── Dockerfile                  # multi-stage: builder / api / dashboard
 ├── pyproject.toml
 └── Makefile
 ```
 
-## Development
+## Desarrollo
 
 ```bash
 make install        # uv sync --all-extras
 make fix            # ruff check --fix + ruff format
 make test           # pytest --cov=src --cov=api
 
-# Run all notebooks (requires data/samples)
+# Ejecutar todos los notebooks (requiere data/samples)
 uv run jupyter nbconvert --to notebook --execute notebooks/*.ipynb
 
-# MLflow UI (view training runs)
+# UI de MLflow (ver runs de entrenamiento)
 uv run mlflow ui --backend-store-uri sqlite:///mlflow.db
 ```
 
 ## Docker
 
 ```bash
-# Build and run the API
+# Construir y correr la API
 docker build --target api -t doc-auth-api .
 docker run -p 8000:8000 doc-auth-api
 
-# Build and run the dashboard
+# Construir y correr el dashboard
 docker build --target dashboard -t doc-auth-dashboard .
 docker run -p 8501:8501 doc-auth-dashboard
 ```
 
+## Despliegue (Hugging Face Spaces)
+
+El dashboard se despliega en **Hugging Face Spaces** (Docker SDK) reutilizando el
+stage `dashboard` del Dockerfile. La guía paso a paso está en
+[deploy/huggingface/DEPLOY.md](deploy/huggingface/DEPLOY.md):
+
+1. `hf auth login` con un token de tipo **Write**.
+2. Crear un Space (Docker) y copiar el proyecto.
+3. Incluir el checkpoint vía Git LFS (`git add -f models/saved/*.pt`).
+4. `git push` → el Space construye y queda en línea.
+
+Demo en vivo: https://huggingface.co/spaces/Pradnas/document-authentication-dashboard
+
 ## Model Registry
 
-Register a checkpoint, promote it through deployment stages, and serve it by alias:
+Registra un checkpoint, promociónalo entre stages de despliegue y sírvelo por alias:
 
 ```python
 from src.models.registry import ModelRegistry
@@ -275,14 +314,14 @@ registry = ModelRegistry(model_name="document-authenticator")
 version = registry.register(
     "models/saved/efficientnet_b0_best.pt",
     metrics={"val_f1": 0.94, "val_auc": 0.97},
-    description="EfficientNet-B0, two-phase fine-tune",
+    description="EfficientNet-B0, fine-tune en dos fases",
 )
-registry.promote(version, alias="staging")      # validate
-registry.promote(version, alias="production")    # deploy
+registry.promote(version, alias="staging")      # validar
+registry.promote(version, alias="production")    # desplegar
 ```
 
-Serve the production model from the API via environment variables (falls back to
-the local checkpoint if the registry is unreachable):
+Sirve el modelo de producción desde la API vía variables de entorno (con fallback
+al checkpoint local si el registry no está disponible):
 
 ```bash
 export MLFLOW_TRACKING_URI=sqlite:///mlflow.db
@@ -290,8 +329,9 @@ export MODEL_REGISTRY_ALIAS=production
 uvicorn api.main:app
 ```
 
-Rollback is atomic: `registry.promote(previous_version, "production")`.
+El rollback es atómico: `registry.promote(version_anterior, "production")`.
 
 ---
 
-Built as a portfolio project for document forensics and computer vision applications.
+Construido como proyecto de portafolio para forense documental y aplicaciones de
+visión por computadora.

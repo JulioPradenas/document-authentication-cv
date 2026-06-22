@@ -15,6 +15,7 @@ env/
 data/raw/*
 data/processed/*
 data/augmented/*
+data/train/
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !data/augmented/.gitkeep

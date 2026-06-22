@@ -12,7 +12,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
-import torch.nn as nn
+import torch.nn.functional as F
 from sklearn.metrics import f1_score, roc_auc_score
 from torch.optim import Adam
 from torch.optim.lr_scheduler import CosineAnnealingLR
@@ -77,10 +77,25 @@ class Trainer:
         self.device = torch.device(self.cfg.device)
         self.model.to(self.device)
 
-        self.criterion = nn.BCELoss()  # model already has Sigmoid
-
         self._best_val_f1 = -1.0
         self._best_ckpt_path = Path(self.cfg.checkpoint_dir) / self.cfg.checkpoint_name
+
+    def _compute_loss(self, preds: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+        """Binary cross-entropy on probabilities, with optional positive-class weighting.
+
+        The model already applies Sigmoid, so we use F.binary_cross_entropy (not
+        BCEWithLogitsLoss). When cfg.pos_weight is set, positive samples are weighted
+        by pos_weight — equivalent to BCEWithLogitsLoss(pos_weight=...) — to counter
+        class imbalance.
+        """
+        if self.cfg.pos_weight is not None:
+            weights = torch.where(
+                labels == 1,
+                torch.as_tensor(self.cfg.pos_weight, dtype=preds.dtype, device=preds.device),
+                torch.ones((), dtype=preds.dtype, device=preds.device),
+            )
+            return F.binary_cross_entropy(preds, labels, weight=weights)
+        return F.binary_cross_entropy(preds, labels)
 
     # ------------------------------------------------------------------
     # Public API
@@ -206,7 +221,7 @@ class Trainer:
             labels = labels.to(self.device)
             optimizer.zero_grad()
             preds = self.model(images)
-            loss = self.criterion(preds, labels)
+            loss = self._compute_loss(preds, labels)
             loss.backward()
             optimizer.step()
             total_loss += loss.item() * len(labels)
@@ -224,7 +239,7 @@ class Trainer:
             images = images.to(self.device)
             labels = labels.to(self.device)
             probs = self.model(images)
-            loss = self.criterion(probs, labels)
+            loss = self._compute_loss(probs, labels)
             total_loss += loss.item() * len(labels)
             prob_chunks.append(probs.cpu().numpy())
             label_chunks.append(labels.cpu().numpy())
