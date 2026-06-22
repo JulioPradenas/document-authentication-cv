@@ -13,6 +13,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import shutil
 from pathlib import Path
 
 import cv2
@@ -24,6 +25,8 @@ _INTENSITIES: list[Intensity] = ["mild", "medium", "strong"]
 
 def build_forgeries(authentic_dir: Path, forged_dir: Path, seed: int = 42) -> int:
     """Write one synthetic forgery per authentic image. Returns the count."""
+    if forged_dir.exists():
+        shutil.rmtree(forged_dir)  # idempotent: avoid mixing in stale forgeries
     forged_dir.mkdir(parents=True, exist_ok=True)
     generator = SyntheticForgeryGenerator(seed=seed)
     types = list(ForgeryType)
