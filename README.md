@@ -77,6 +77,12 @@ automático si el registry no está disponible.
 > paso final, no un rediseño (ver [estudio §7](docs/ESTUDIO_DEL_PROYECTO.md)). El
 > valor demostrado aquí es la **arquitectura MLOps end-to-end**, independiente de
 > la precisión del modelo.
+>
+> Se intentó además una ruta ligera sobre **documentos reales** (un tipo de
+> MIDV-500 + falsificaciones sintéticas, scripts `prepare_t2_authentic.py` /
+> `build_t2_dataset.py`): el modelo **no separó** (AUC ≈ 0.52). Es un hallazgo
+> honesto sobre lo difícil que es la forense documental con datos sintéticos —
+> ver [estudio §5.7](docs/ESTUDIO_DEL_PROYECTO.md).
 
 **Calidad de ingeniería (verificada):**
 
