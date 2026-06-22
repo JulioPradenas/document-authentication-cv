@@ -235,6 +235,33 @@ del sidebar (`at.sidebar.success` / `at.sidebar.error`) en vez de depender del
 mock. **Lección**: testear frameworks con ejecución propia requiere entender su
 modelo de aislamiento.
 
+### 5.7 T2-lite: entrenar sobre documentos reales no separó (y por qué)
+
+**Insight**: se montó un pipeline ligero para subir el modelo de "juguete" a algo
+más real sin abusar de disco ni cómputo (`scripts/prepare_t2_authentic.py` +
+`scripts/build_t2_dataset.py`): se descargó **un solo tipo** de MIDV-500, se
+usaron 100 frames reales como clase auténtica (downscale a 384 px, el zip se
+borra al instante) y se generaron 100 falsificaciones sintéticas sobre ellos.
+
+**Resultado: el modelo no separó** — Test AUC ≈ 0.52 (azar), F1 0.29, y el
+`train_loss` se quedó clavado en ~0.69 (≈ log 2): ni siquiera ajustó el set de
+entrenamiento.
+
+**Diagnóstico**: a diferencia del T1 de juguete (perturbaciones enormes y
+obvias), las falsificaciones sintéticas sobre documentos reales son
+**localizadas y sutiles** (un blur pequeño, un shift de color en un círculo, un
+parche). Tres factores se combinan: (1) la señal ocupa una fracción mínima del
+frame; (2) el **denoise** del preprocesamiento atenúa justo esos artefactos
+finos; (3) 140 imágenes de entrenamiento + un train exprés no bastan para
+aprender una señal tan fina con un backbone casi congelado.
+
+**Lección**: la dificultad real de la forense documental **no se resuelve con
+datos sintéticos + cómputo mínimo**. Para que esto funcione harían falta
+falsificaciones *reales* (no las hay en un dataset público), más datos y más
+capacidad de entrenamiento — exactamente lo que advierte §7. El pipeline queda
+**reproducible** para cuando existan esos datos; el hallazgo (qué se intentó, qué
+falló y por qué) vale más que un número de accuracy inflado por una tarea fácil.
+
 ---
 
 ## 6. Resultados
